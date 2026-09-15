@@ -492,8 +492,7 @@ function cizRapor(){
       ${!v('SAS kodu')&&!v('Risk')?'<p class="ipucu" style="margin:6px 0 0">Masa başı değerlendirmesi henüz yapılmadı.</p>':''}</section>
     ${v('Sorumlu birim')||v('DÖF no')||v('Termin')||v('Not')?`<section class="r-blok"><h3>Eylem ve takip</h3>
       ${satir('Sorumlu birim',v('Sorumlu birim'))}${satir('DÖF no',v('DÖF no'))}${satir('Termin',v('Termin'))}${v('Not')?`<p class="r-not">${esc(v('Not'))}</p>`:''}</section>`:''}
-    <section class="r-blok r-sistem">${satir('Cihaz',v('Cihaz'))}${satir('Sisteme alındı',v('Sisteme alındı'))}${r.sesler&&r.sesler.length?satir('Ses kayıtları',r.sesler.length+' dosya'):''}${r.satir?satir('Tablo satırı',String(r.satir)):''}
-      ${r.tabloUrl?`<a class="bag" href="${esc(r.tabloUrl)}" target="_blank" rel="noopener">Tabloda aç ↗</a>`:''}</section>`;
+    <section class="r-blok r-sistem">${satir('Cihaz',v('Cihaz'))}${satir('Sisteme alındı',v('Sisteme alındı'))}${r.sesler&&r.sesler.length?satir('Ses kayıtları',r.sesler.length+' dosya'):''}${r.satir?satir('Tablo satırı',String(r.satir)):''}</section>`;
   }
   $('#app').innerHTML=`<div class="kap">${ustBar('Bulgu raporu')}<div class="icerik rapor">${govde}</div>
     <div class="alt"><div class="ic"><button class="btn sessiz" id="geri">Liste</button>${r.alanlar?`<button class="btn ikincil" id="paylas">Paylaş</button>`:''}</div></div>
