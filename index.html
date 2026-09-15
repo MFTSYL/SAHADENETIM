@@ -67,6 +67,14 @@ input[type=file]{display:none}
 .anahtar{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 0;border-top:1px solid var(--cizgi)}
 .anahtar input{width:26px;height:26px;accent-color:var(--ana)}
 .bag{color:var(--ana);font-weight:600;padding:10px 4px}
+.kameraEkran{position:fixed;inset:0;z-index:30;background:#000;display:flex;flex-direction:column}
+.kameraEkran video{flex:1;width:100%;object-fit:cover;min-height:0}
+.kameraAlt{display:flex;align-items:center;justify-content:space-between;padding:18px 22px calc(22px + env(safe-area-inset-bottom));background:#000}
+.kameraAlt button{color:#fff;font-weight:700;min-width:84px;min-height:56px;border-radius:12px;background:rgba(255,255,255,.14)}
+.deklansor{width:78px;height:78px;min-width:78px!important;border-radius:50%!important;background:#fff!important;border:5px solid rgba(255,255,255,.45);background-clip:padding-box!important}
+.flas{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:31;transition:opacity .15s}
+.kameraSayac{position:absolute;top:calc(14px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);background:rgba(0,0,0,.55);color:#fff;padding:6px 14px;border-radius:20px;font-weight:700}
+.durumSatir{font-size:13px;color:var(--soluk);margin-top:8px}
 </style></head>
 <body><div id="app"></div>
 <input type="file" id="kamera" accept="image/*" capture="environment">
@@ -98,31 +106,43 @@ const KAM='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-wid
 
 // ---------- Ses: tanıma + dosya ----------
 const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-let kayit=null; // {hedef:'konum'|'gozlem', tanima, recorder, parcalar[], metin, ara, dur}
+const ANDROID=/Android/i.test(navigator.userAgent);
+// Android'de mikrofon aynı anda hem ses kaydına hem metne çevirmeye verilemiyor: varsayılan metin
+const sesDosyasiAcik=()=>ayar().sesSakla && !(ANDROID && SR);
+let kayit=null;
 async function sesBaslat(hedef){
   if(kayit) await sesDurdur();
-  const k={hedef,metin:'',ara:'',durdu:false,parcalar:[],baslangic:Date.now()};
-  kayit=k;
+  const k={hedef,metin:'',ara:'',durdu:false,parcalar:[],baslangic:Date.now(),sonuc:0};
+  kayit=k; aktif.uyari='';
   try{ if('wakeLock' in navigator) k.kilit=await navigator.wakeLock.request('screen'); }catch(e){}
-  if(ayar().sesSakla && navigator.mediaDevices && window.MediaRecorder){
+  if(sesDosyasiAcik() && navigator.mediaDevices && window.MediaRecorder){
     try{
       k.akis=await navigator.mediaDevices.getUserMedia({audio:true});
       const tip=['audio/webm;codecs=opus','audio/mp4','audio/webm'].find(t=>MediaRecorder.isTypeSupported&&MediaRecorder.isTypeSupported(t))||'';
       k.recorder=new MediaRecorder(k.akis,tip?{mimeType:tip,audioBitsPerSecond:32000}:undefined);
       k.recorder.ondataavailable=e=>{if(e.data.size)k.parcalar.push(e.data)};
       k.recorder.start(1000);
-    }catch(e){ aktif.uyari='Ses dosyası kaydedilemedi (mikrofon izni?). Metne dönüştürme denenecek.'; }
+    }catch(e){ aktif.uyari='Ses dosyası kaydedilemedi (mikrofon izni?).'; }
   }
   if(SR){
-    const t=new SR(); t.lang='tr-TR'; t.continuous=true; t.interimResults=true;
-    t.onresult=ev=>{ let ara=''; for(let i=ev.resultIndex;i<ev.results.length;i++){const r=ev.results[i]; if(r.isFinal) k.metin+=(k.metin?' ':'')+r[0].transcript.trim(); else ara+=r[0].transcript;} k.ara=ara; canliYaz(); };
-    t.onerror=ev=>{ if(ev.error==='not-allowed'||ev.error==='service-not-allowed'){aktif.uyari='Konuşma tanıma izni verilmedi. Ses dosyası yine de saklanır; metin sonra elle eklenebilir.';k.durdu=true;ciz();}
-      else if(ev.error==='audio-capture'){aktif.uyari='Bu telefonda mikrofon aynı anda hem kayda hem metne dönüştürmeye verilemiyor. Ayarlar\'dan "Ses dosyasını da sakla"yı kapatın.';k.durdu=true;ciz();}
-      else if(ev.error==='network'){aktif.uyari='Metne dönüştürme için internet gerekiyor. Ses dosyası saklanıyor; metin sonra eklenebilir.';k.durdu=true;ciz();} };
-    t.onend=()=>{ if(kayit===k&&!k.durdu){ try{t.start()}catch(e){} } }; // iOS/Android sessizlikte durdurur; yeniden başlat
-    try{t.start();k.tanima=t;}catch(e){}
-  } else if(!k.recorder){ aktif.uyari='Bu tarayıcı konuşma tanımayı desteklemiyor. Android\'de Chrome, iPhone\'da Safari kullanın.'; }
-  else { aktif.uyari='Bu tarayıcıda metne dönüştürme yok; yalnız ses dosyası saklanıyor.'; }
+    const yeni=()=>{
+      const t=new SR(); t.lang='tr-TR'; t.continuous=false; t.interimResults=true; t.maxAlternatives=1;
+      t.onresult=ev=>{ let ara=''; for(let i=ev.resultIndex;i<ev.results.length;i++){const r=ev.results[i];
+          if(r.isFinal){ const m=r[0].transcript.trim(); if(m){k.metin+=(k.metin?' ':'')+m; k.sonuc++;} } else ara+=r[0].transcript; }
+        k.ara=ara; canliYaz(); };
+      t.onerror=ev=>{
+        if(ev.error==='not-allowed'||ev.error==='service-not-allowed'){k.durdu=true;aktif.uyari='Metne çevirme izni verilmedi. Tarayıcı ayarlarından mikrofon iznini açın.';ciz();}
+        else if(ev.error==='audio-capture'){k.durdu=true;aktif.uyari='Mikrofon metne çevirmeye verilemedi. Ayarlar\'da "Ses dosyasını da sakla" kapalı olmalı.';ciz();}
+        else if(ev.error==='network'){k.durdu=true;aktif.uyari='Metne çevirme için internet gerekiyor.';ciz();}
+        // no-speech ve aborted: onend içinde yeniden başlar
+      };
+      t.onend=()=>{ if(kayit===k&&!k.durdu){ k.ara&&(k.metin+=(k.metin?' ':'')+k.ara.trim(),k.ara=''); try{ k.tanima=yeni(); k.tanima.start(); }catch(e){} } };
+      return t;
+    };
+    try{ k.tanima=yeni(); k.tanima.start(); }catch(e){ aktif.uyari='Metne çevirme başlatılamadı.'; }
+  } else {
+    aktif.uyari='Bu tarayıcı metne çevirmeyi desteklemiyor. Android\'de Google Chrome, iPhone\'da Safari ile açın.';
+  }
   k.zamanlayici=setTimeout(()=>{ if(kayit===k) sesDurdur().then(ciz); },180000);
   ciz();
 }
@@ -135,6 +155,7 @@ async function sesDurdur(){
   try{k.kilit&&k.kilit.release()}catch(e){}
   await new Promise(r=>setTimeout(r,350)); // son sonuçların gelmesi için
   const metin=(k.metin+(k.ara?' '+k.ara:'')).trim();
+  if(SR && !metin && Date.now()-k.baslangic>2500) aktif.uyari='Konuşma metne çevrilemedi. Telefona yakın ve net konuşup tekrar deneyin; sorun sürerse Google Chrome kullanıldığından emin olun.';
   let ses=null;
   if(k.parcalar.length){ const blob=new Blob(k.parcalar,{type:k.recorder.mimeType||'audio/webm'}); ses={mime:blob.type.split(';')[0],uzanti:blob.type.includes('mp4')?'m4a':'webm',data:await b64(blob),sure:Math.round((Date.now()-k.baslangic)/1000)}; }
   if(!metin&&!ses) return;
@@ -144,23 +165,47 @@ async function sesDurdur(){
 }
 const b64=blob=>new Promise(r=>{const f=new FileReader();f.onload=()=>r(String(f.result).split(',')[1]);f.readAsDataURL(blob);});
 
-// ---------- Fotoğraf (kamera veya galeri) ----------
-function kucult(img,maks,kalite){ const o=Math.min(1,maks/Math.max(img.naturalWidth,img.naturalHeight));
-  const c=document.createElement('canvas'); c.width=Math.round(img.naturalWidth*o); c.height=Math.round(img.naturalHeight*o);
-  c.getContext('2d').drawImage(img,0,0,c.width,c.height); return c.toDataURL('image/jpeg',kalite).split(',')[1]; }
+// ---------- Fotoğraf: sayfa içi kamera veya galeri ----------
+function kucult(kaynak,gen,yuk,maks,kalite){ const o=Math.min(1,maks/Math.max(gen,yuk));
+  const c=document.createElement('canvas'); c.width=Math.round(gen*o); c.height=Math.round(yuk*o);
+  c.getContext('2d').drawImage(kaynak,0,0,c.width,c.height); return c.toDataURL('image/jpeg',kalite).split(',')[1]; }
+function fotoKaydet(kaynak,gen,yuk){
+  aktif.fotolar.push({mime:'image/jpeg',uzanti:'jpg',data:kucult(kaynak,gen,yuk,1600,0.8),kucuk:kucult(kaynak,gen,yuk,700,0.7),saat:saat()});
+  taslakSakla();
+}
 async function fotoEkle(dosyalar){
-  if(!aktif) return;
+  if(!aktif) return; let hata=0;
   for(const dosya of dosyalar){
     try{
-      const url=URL.createObjectURL(dosya);
-      const img=await new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=rej;i.src=url;});
-      aktif.fotolar.push({mime:'image/jpeg',uzanti:'jpg',data:kucult(img,1600,0.8),kucuk:kucult(img,700,0.7),saat:saat()});
-      URL.revokeObjectURL(url);
-    }catch(e){ aktif.uyari='Bir fotoğraf okunamadı (desteklenmeyen biçim olabilir).'; }
+      let kaynak,gen,yuk;
+      if(window.createImageBitmap){ kaynak=await createImageBitmap(dosya,{imageOrientation:'from-image'}); gen=kaynak.width; yuk=kaynak.height; }
+      else { const url=URL.createObjectURL(dosya); kaynak=await new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=rej;i.src=url;}); gen=kaynak.naturalWidth; yuk=kaynak.naturalHeight; }
+      fotoKaydet(kaynak,gen,yuk);
+    }catch(e){ hata++; }
   }
-  taslakSakla(); ciz();
+  if(hata) aktif.uyari=hata+' fotoğraf okunamadı (biçim desteklenmiyor olabilir).';
+  ciz();
 }
 ['kamera','galeri'].forEach(id=>$('#'+id).addEventListener('change',e=>{ const f=[...e.target.files]; e.target.value=''; fotoEkle(f); }));
+
+let kameraAkis=null;
+async function kameraAc(){
+  if(kayit) await sesDurdur();
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){ $('#kamera').click(); return; }
+  try{
+    kameraAkis=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}},audio:false});
+  }catch(e){ aktif.uyari='Kamera açılamadı (izin?). Galeriden ekleyebilirsiniz.'; ciz(); return; }
+  const el=document.createElement('div'); el.className='kameraEkran'; el.id='kameraEkran';
+  el.innerHTML=`<video id="vid" autoplay playsinline muted></video><div class="kameraSayac" id="kSayac">${aktif.fotolar.length} fotoğraf</div>
+    <div class="kameraAlt"><button id="kKapat">Bitti</button><button class="deklansor" id="kCek" aria-label="Fotoğraf çek"></button><button id="kGaleri">Galeri</button></div><div class="flas" id="flas"></div>`;
+  document.body.appendChild(el);
+  const v=$('#vid'); v.srcObject=kameraAkis; try{await v.play();}catch(e){}
+  $('#kCek').onclick=()=>{ if(!v.videoWidth) return; fotoKaydet(v,v.videoWidth,v.videoHeight);
+    const f=$('#flas'); f.style.opacity=.8; setTimeout(()=>f.style.opacity=0,120); $('#kSayac').textContent=aktif.fotolar.length+' fotoğraf'; if(navigator.vibrate) navigator.vibrate(40); };
+  $('#kKapat').onclick=kameraKapat;
+  $('#kGaleri').onclick=()=>{ kameraKapat(); $('#galeri').click(); };
+}
+function kameraKapat(){ if(kameraAkis){kameraAkis.getTracks().forEach(t=>t.stop()); kameraAkis=null;} const e=$('#kameraEkran'); if(e) e.remove(); ciz(); }
 
 // ---------- Kayıt yaşam döngüsü ----------
 function yeniKayit(alan){
@@ -198,7 +243,7 @@ async function gonder(){
       try{
         const r=await fetch(s.api,{method:'POST',body:JSON.stringify({token:s.token,action:'kayit',kayit:p})});
         const j=await r.json();
-        if(j.ok){ await DB.sil(p.id); if(g){g.durum='ok';g.satir=j.satir;} }
+        if(j.ok){ await DB.sil(p.id); if(g){g.durum='ok';g.satir=j.satir;g.islenen=`${j.foto??'?'} foto, ${j.ses??'?'} ses`;} }
         else { if(g){g.durum='hata';g.hata=j.hata;} if(/Yetkisiz/.test(j.hata||'')) break; }
       }catch(e){ if(g){g.durum='bekliyor';} break; } // bağlantı yok: sonra tekrar
       LS.set('gecmis',gecmis); kuyrukSayisi=(await DB.hepsi()).length; ciz();
@@ -226,7 +271,7 @@ function cizAna(){
   $('#app').innerHTML=`<div class="kap">${ustBar('Saha denetimi',`<button class="rozet" id="ayarBtn">Ayarlar</button>`)}
     <div class="icerik">${mesaj?`<div class="uyari">${esc(mesaj)}</div>`:''}
     ${bugun.length?bugun.map(g=>`<div class="satir-kart"><div class="baslik">${esc(g.alan)}</div><div class="kucuk">${esc(g.saat)} · ${g.foto} fotoğraf</div><div>${esc(g.ozet)}</div>
-      <span class="durum ${g.durum}">${g.durum==='ok'?'Tabloya işlendi':g.durum==='hata'?'Hata: '+esc(g.hata||''):'Gönderilmeyi bekliyor'}</span></div>`).join('')
+      <span class="durum ${g.durum}">${g.durum==='ok'?'Tabloya işlendi'+(g.islenen?' · '+g.islenen:''):g.durum==='hata'?'Hata: '+esc(g.hata||''):'Gönderilmeyi bekliyor'}</span></div>`).join('')
       :`<div class="bos"><b>Bugün kayıt yok</b>Yeni kayıt açın, alanı menüden seçin, konuşun ve fotoğraf çekin.</div>`}
     ${kuyrukSayisi?`<button class="bag" id="tekrar">Bekleyenleri şimdi gönder</button>`:''}</div>
     <div class="alt"><div class="ic"><button class="btn birincil" id="yeni">Yeni kayıt</button></div></div></div>`;
@@ -258,6 +303,7 @@ function cizKayit(){
   const parcaHtml=(p,i,tur)=>`<div class="parca"><p>${esc(p.metin)||'<span class="ara">(yalnız ses kaydı)</span>'}${p.ses?` <span class="ara">· ${p.ses.sure} sn ses</span>`:''}</p><button class="sil" data-sil="${tur}" data-i="${i}" aria-label="Sil">×</button></div>`;
   $('#app').innerHTML=`<div class="kap">${ustBar(esc(a.alan),`<span class="rozet">${esc(a.acilis)}</span>`)}
   <div class="icerik">${a.uyari?`<div class="uyari">${esc(a.uyari)}</div>`:''}
+    <div class="durumSatir" style="margin:0 2px 10px">Metne çevirme: ${SR?'açık':'<b style="color:var(--kirmizi)">bu tarayıcıda yok</b>'} · Ses dosyası: ${sesDosyasiAcik()?'saklanıyor':'saklanmıyor'}</div>
     <div class="blok"><div class="blok-bas"><b>Konum detayı</b><span>kısa: oda, dolap, cihaz</span></div>
       ${micBtn('konum','kucuk',a.konum?'Yeniden söyle':'Konumu söyle')}
       ${acik('konum')?`<div class="parca"><p id="canli"></p></div>`:a.konum?parcaHtml(a.konum,0,'konum'):''}
@@ -275,8 +321,8 @@ function cizKayit(){
   <div class="alt"><div class="ic"><button class="btn sessiz" id="vazgec">Vazgeç</button><button class="btn birincil" id="kapat" ${(!a.gozlem.length&&!a.fotolar.length&&!acik('gozlem'))?'disabled':''}>Kaydı kapat</button></div></div></div>`;
   canliYaz();
   document.querySelectorAll('[data-mik]').forEach(b=>b.onclick=async()=>{ const h=b.dataset.mik; if(kayit&&kayit.hedef===h){await sesDurdur();ciz();} else sesBaslat(h); });
-  $('#fotoBtn').onclick=async()=>{ if(kayit){await sesDurdur();} $('#kamera').click(); };
-  $('#galeriBtn').onclick=async()=>{ if(kayit){await sesDurdur();} $('#galeri').click(); };
+  $('#fotoBtn').onclick=kameraAc;
+  $('#galeriBtn').onclick=()=>{ if(kayit){ sesDurdur().then(ciz); } $('#galeri').click(); };
   document.querySelectorAll('[data-sil]').forEach(b=>b.onclick=()=>{ if(!confirm('Silinsin mi?'))return; const t=b.dataset.sil,i=+b.dataset.i;
     if(t==='konum')a.konum=null; else if(t==='gozlem')a.gozlem.splice(i,1); else a.fotolar.splice(i,1); taslakSakla(); ciz(); });
   $('#kapat').onclick=async()=>{ $('#kapat').disabled=true; await kaydiKapat(); };
@@ -289,7 +335,7 @@ function cizAyar(){
   <div class="icerik ayar"><div class="blok">
     ${s.api?`<div class="durum ok" style="margin:0 0 12px">Google Sheets bağlantısı tanımlı</div>`:`<div class="uyari" style="margin:0 0 12px">Bağlantı yok. Koordinatörlüğün verdiği kurulum linkini bu telefonda bir kez açın.</div>`}
     <label for="denetci">Denetçi adı</label><input id="denetci" value="${esc(s.denetci)}" placeholder="Örn. Dr. T. Soyal" autocomplete="name">
-    <div class="anahtar"><span>Ses dosyasını da sakla<br><span style="font-size:13px;color:var(--soluk)">Kapatılırsa yalnız metin gönderilir</span></span><input type="checkbox" id="sesSakla" ${s.sesSakla?'checked':''}></div>
+    <div class="anahtar"><span>Ses dosyasını da sakla<br><span style="font-size:13px;color:var(--soluk)">${ANDROID&&SR?'Android\'de kapalı tutulur; açıkken konuşma metne çevrilemiyor':'Kapatılırsa yalnız metin gönderilir'}</span></span><input type="checkbox" id="sesSakla" ${s.sesSakla?'checked':''}></div>
   </div></div>
   <div class="alt"><div class="ic"><button class="btn birincil" id="kaydet">Kaydet</button></div></div></div>`;
   $('#kaydet').onclick=()=>{ const d=$('#denetci').value.trim(); if(!d){$('#denetci').focus();return;} LS.set('denetci',d); LS.set('sesSakla',$('#sesSakla').checked); ekran='ana'; ciz(); alanlariGetir(); };
