@@ -67,6 +67,19 @@ input[type=file]{display:none}
 .anahtar{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 0;border-top:1px solid var(--cizgi)}
 .anahtar input{width:26px;height:26px;accent-color:var(--ana)}
 .bag{color:var(--ana);font-weight:600;padding:10px 4px}
+.adimlar{display:flex;gap:6px;margin:2px 0 10px}
+.adimlar span{flex:1;text-align:center;font-size:13px;font-weight:600;padding:7px 4px;border-radius:20px;background:#fff;border:1px solid var(--cizgi);color:var(--soluk)}
+.adimlar span.aktif{background:var(--ana);border-color:var(--ana);color:#fff}
+.adimlar span.bitti{background:var(--ana2);border-color:var(--ana2);color:var(--ana)}
+.adim-baslik{font-size:21px;margin:4px 4px 0}
+.icerik>.ipucu{margin:2px 4px 12px}
+.secim{display:flex;width:100%;text-align:left;align-items:center;gap:12px;background:var(--kart);border:1.5px solid var(--cizgi);border-radius:12px;padding:12px 14px;margin-bottom:8px;min-height:64px}
+.secim .kutu{flex:none;width:30px;height:30px;border-radius:8px;border:2px solid var(--cizgi);display:flex;align-items:center;justify-content:center;color:#fff}
+.secim .kutu svg{width:20px;height:20px}
+.secim .metin{flex:1;min-width:0}.secim .metin b{display:block;font-size:16px}.secim .metin span{display:block;font-size:13px;color:var(--soluk);margin-top:2px}
+.secim.on{border-color:var(--ana);background:var(--ana2)}
+.secim.on .kutu{background:var(--ana);border-color:var(--ana)}
+.kapsam{margin:10px 12px 0;font-size:14px;background:var(--kart);border:1px solid var(--cizgi);border-radius:10px;padding:8px 12px;color:var(--ink)}
 .kameraEkran{position:fixed;inset:0;z-index:30;background:#000;display:flex;flex-direction:column}
 .kameraEkran video{flex:1;width:100%;object-fit:cover;min-height:0}
 .kameraAlt{display:flex;align-items:center;justify-content:space-between;padding:18px 22px calc(22px + env(safe-area-inset-bottom));background:#000}
@@ -95,7 +108,7 @@ const DB={ ac(){return new Promise((res,rej)=>{const r=indexedDB.open('saha-dene
   koy(k){return this.islem('readwrite',s=>s.put(k));}, sil(id){return this.islem('readwrite',s=>s.delete(id));}, hepsi(){return this.islem('readonly',s=>s.getAll());} };
 
 // ---------- Durum ----------
-let ekran='ana', aktif=null, alanlar=LS.get('alanlar',[]), gecmis=LS.get('gecmis',[]), kuyrukSayisi=0, gonderiliyor=false, mesaj='';
+let ekran='ana', aktif=null, alanlar=LS.get('alanlar',[]).filter(a=>a&&a.servis), secim={kat:new Set(),servis:new Set(),bolum:new Set()}, gecmis=LS.get('gecmis',[]), kuyrukSayisi=0, gonderiliyor=false, mesaj='';
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const yerelGun=(d=new Date())=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
@@ -208,13 +221,28 @@ async function kameraAc(){
 function kameraKapat(){ if(kameraAkis){kameraAkis.getTracks().forEach(t=>t.stop()); kameraAkis=null;} const e=$('#kameraEkran'); if(e) e.remove(); ciz(); }
 
 // ---------- Kayıt yaşam döngüsü ----------
-function yeniKayit(alan){
+const SEP='\u0001';
+const servisAnahtar=a=>[a.kat,a.blok,a.servis].join(SEP);
+const bolumAnahtar=a=>[a.kat,a.blok,a.servis,a.bolum].join(SEP);
+const tekil=l=>[...new Set(l.filter(Boolean))];
+function yeniKayit(sec){
+  const servisler=alanlar.filter(a=>sec.servis.has(servisAnahtar(a)));
+  const seciliBolumler=servisler.filter(a=>a.bolum&&sec.bolum.has(bolumAnahtar(a)));
+  // Bölüm seçilmemiş servisler servis düzeyinde kaydedilir
+  const kapsam=[...seciliBolumler, ...servisler.filter(a=>!seciliBolumler.some(b=>servisAnahtar(b)===servisAnahtar(a)))];
   const n=new Date();
   const hms=[n.getHours(),n.getMinutes(),n.getSeconds()].map(x=>String(x).padStart(2,'0')).join('');
+  const katlar=tekil(kapsam.map(a=>a.kat)), servisAdlari=tekil(kapsam.map(a=>a.servis)), bolumAdlari=tekil(seciliBolumler.map(a=>a.bolum));
   aktif={id:'SD-'+yerelGun(n).replace(/-/g,'')+hms+'-'+Math.random().toString(36).slice(2,6),
     tarih:n.toLocaleDateString('tr-TR'),tarihISO:yerelGun(n),acilis:saat(),
-    blok:alan.blok,kat:alan.kat,alan:alan.ad,alanTipi:alan.tip,konum:null,gozlem:[],fotolar:[],uyari:''};
-  const son=LS.get('sonAlanlar',[]).filter(a=>a!==alan.ad); son.unshift(alan.ad); LS.set('sonAlanlar',son.slice(0,5));
+    kat:katlar.join('; '),blok:tekil(kapsam.map(a=>a.blok)).join('; '),servis:servisAdlari.join('; '),bolum:bolumAdlari.join('; '),
+    alanTipi:tekil(kapsam.map(a=>a.tip)).join('; '),
+    baslik:(bolumAdlari.length?bolumAdlari:servisAdlari).slice(0,2).join(', ')+((bolumAdlari.length||servisAdlari.length)>2?' +'+((bolumAdlari.length||servisAdlari.length)-2):''),
+    altBaslik:katlar.join(', '),
+    konum:null,gozlem:[],fotolar:[],uyari:''};
+  aktif.alan=aktif.servis+(aktif.bolum?' — '+aktif.bolum:'');
+  const kayitli={kat:[...sec.kat],servis:[...sec.servis],bolum:[...sec.bolum],etiket:aktif.baslik,alt:aktif.altBaslik};
+  const son=LS.get('sonSecimler',[]).filter(x=>x.etiket+x.alt!==kayitli.etiket+kayitli.alt); son.unshift(kayitli); LS.set('sonSecimler',son.slice(0,3));
   ekran='kayit'; taslakSakla(); ciz(); window.scrollTo(0,0);
 }
 function taslakSakla(){ try{LS.set('taslak',aktif)}catch(e){ /* kota dolarsa fotoğraflar yalnız bellekte kalır */ try{LS.set('taslak',{...aktif,fotolar:[]})}catch(_){} } }
@@ -222,14 +250,14 @@ async function kaydiKapat(){
   if(kayit) await sesDurdur();
   const s=ayar();
   const paket={id:aktif.id,tarih:aktif.tarih,tarihISO:aktif.tarihISO,acilis:aktif.acilis,kapanis:saat(),denetci:s.denetci,
-    blok:aktif.blok,kat:aktif.kat,alan:aktif.alan,alanTipi:aktif.alanTipi,
+    kat:aktif.kat,blok:aktif.blok,servis:aktif.servis||aktif.alan,bolum:aktif.bolum||'',alan:aktif.alan,alanTipi:aktif.alanTipi,
     konumDetay:aktif.konum?aktif.konum.metin:'',
     gozlem:aktif.gozlem.map(p=>p.metin).filter(Boolean).join('\n'),
     fotolar:aktif.fotolar.map(({mime,uzanti,data,kucuk})=>({mime,uzanti,data,kucuk})),
     sesler:[aktif.konum,...aktif.gozlem].filter(p=>p&&p.ses).map(p=>({mime:p.ses.mime,uzanti:p.ses.uzanti,data:p.ses.data})),
     cihaz:navigator.userAgent.includes('iPhone')?'iPhone':/Android/.test(navigator.userAgent)?'Android':'Bilgisayar'};
   await DB.koy(paket);
-  gecmis.unshift({id:paket.id,alan:paket.alan,saat:paket.kapanis,ozet:(paket.gozlem||'(metin yok)').slice(0,90),foto:paket.fotolar.length,durum:'bekliyor'});
+  gecmis.unshift({id:paket.id,alan:aktif.baslik||paket.alan,saat:paket.kapanis,ozet:(paket.gozlem||'(metin yok)').slice(0,90),foto:paket.fotolar.length,durum:'bekliyor'});
   LS.set('gecmis',gecmis.slice(0,60)); localStorage.removeItem('taslak');
   aktif=null; ekran='ana'; ciz(); gonder();
 }
@@ -261,13 +289,15 @@ async function gonder(){
 async function alanlariGetir(){
   const s=ayar(); if(!s.api) return;
   try{ const r=await fetch(`${s.api}?action=alanlar&token=${encodeURIComponent(s.token)}`); const j=await r.json();
-    if(j.ok){ alanlar=j.alanlar; LS.set('alanlar',alanlar); mesaj=''; } else mesaj=j.hata;
+    if(j.ok&&j.surum>=3){ alanlar=j.alanlar; LS.set('alanlar',alanlar); mesaj=''; }
+    else if(j.ok){ mesaj='Sunucu eski sürümde: Apps Script güncellenip yeniden dağıtılmalı.'; }
+    else mesaj=j.hata;
   }catch(e){ mesaj=alanlar.length?'Çevrimdışı: kayıtlı alan listesi kullanılıyor.':'Alan listesi alınamadı; bağlantıyı kontrol edin.'; }
   ciz();
 }
 
 // ---------- Ekranlar ----------
-function ciz(){ ({ana:cizAna,menu:cizMenu,kayit:cizKayit,ayar:cizAyar})[ekran](); }
+function ciz(){ ({ana:cizAna,kat:cizKat,servis:cizServis,bolum:cizBolum,kayit:cizKayit,ayar:cizAyar})[ekran](); }
 function ustBar(baslik,sag=''){ const s=ayar();
   return `<header><div class="ust-satir"><h1>${baslik}</h1>${sag}</div>
   <div class="alt-bilgi">${esc(s.denetci||'Denetçi seçilmedi')} · ${navigator.onLine?'Çevrimiçi':'Çevrimdışı'}${kuyrukSayisi?` · ${kuyrukSayisi} kayıt gönderilmeyi bekliyor`:''}</div></header>`; }
@@ -283,23 +313,67 @@ function cizAna(){
       :`<div class="bos"><b>Bugün kayıt yok</b>Yeni kayıt açın, alanı menüden seçin, konuşun ve fotoğraf çekin.</div>`}
     ${kuyrukSayisi?`<button class="bag" id="tekrar">Bekleyenleri şimdi gönder</button>`:''}</div>
     <div class="alt"><div class="ic"><button class="btn birincil" id="yeni">Yeni kayıt</button></div></div></div>`;
-  $('#yeni').onclick=()=>{ekran='menu';ciz();alanlariGetir();window.scrollTo(0,0);};
+  $('#yeni').onclick=()=>{secim={kat:new Set(),servis:new Set(),bolum:new Set()};ekran='kat';ciz();alanlariGetir();window.scrollTo(0,0);};
   $('#ayarBtn').onclick=()=>{ekran='ayar';ciz();};
   const t=$('#tekrar'); if(t) t.onclick=gonder;
 }
 
-function cizMenu(){
-  const son=LS.get('sonAlanlar',[]).map(ad=>alanlar.find(a=>a.ad===ad)).filter(Boolean);
-  const gruplar={}; alanlar.forEach(a=>{const g=[a.blok&&a.blok+' blok',a.kat].filter(Boolean).join(' · ')||'Diğer';(gruplar[g]=gruplar[g]||[]).push(a);});
-  const satir=a=>`<button class="alan" data-ad="${esc(a.ad)}"><span class="ad">${esc(a.ad)}</span><span class="tip ${esc(a.tip)}">${esc(a.tip||'')}</span></button>`;
-  $('#app').innerHTML=`<div class="kap">${ustBar('Alan seçin')}
-    <div class="icerik">${mesaj?`<div class="uyari">${esc(mesaj)}</div>`:''}
-    ${!alanlar.length?`<div class="bos"><b>Alan listesi yükleniyor</b>Liste Google Sheets'teki "Alanlar" sayfasından gelir.</div>`:''}
-    ${son.length?`<div class="grup"><h2>Son kullanılanlar</h2>${son.map(satir).join('')}</div>`:''}
-    ${Object.entries(gruplar).map(([g,l])=>`<div class="grup"><h2>${esc(g)}</h2>${l.map(satir).join('')}</div>`).join('')}</div>
-    <div class="alt"><div class="ic"><button class="btn sessiz" id="geri" style="flex:1">Geri</button></div></div></div>`;
-  document.querySelectorAll('[data-ad]').forEach(b=>b.onclick=()=>yeniKayit(alanlar.find(a=>a.ad===b.dataset.ad)));
-  $('#geri').onclick=()=>{ekran='ana';ciz();};
+const TIK='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L19 7"/></svg>';
+function adimBas(no,baslik){
+  return `<div class="adimlar">${['Kat','Servis','Bölüm'].map((x,i)=>`<span class="${i+1===no?'aktif':i+1<no?'bitti':''}">${i+1}. ${x}</span>`).join('')}</div><h2 class="adim-baslik">${baslik}</h2><p class="ipucu">Birden fazla seçebilirsiniz.</p>`;
+}
+function secimKarti(anahtar,tur,baslik,alt,rozet){
+  const on=secim[tur].has(anahtar);
+  return `<button class="secim ${on?'on':''}" data-tur="${tur}" data-k="${esc(anahtar)}" aria-pressed="${on}"><span class="kutu">${on?TIK:''}</span><span class="metin"><b>${esc(baslik)}</b>${alt?`<span>${esc(alt)}</span>`:''}</span>${rozet?`<span class="tip">${esc(rozet)}</span>`:''}</button>`;
+}
+function secimBagla(){
+  document.querySelectorAll('[data-tur]').forEach(b=>b.onclick=()=>{ const t=b.dataset.tur,k=b.dataset.k; secim[t].has(k)?secim[t].delete(k):secim[t].add(k); const y=window.scrollY; ciz(); window.scrollTo(0,y); });
+  document.querySelectorAll('[data-hepsi]').forEach(b=>b.onclick=()=>{ const l=JSON.parse(b.dataset.hepsi); const hepsi=l.every(k=>secim.bolum.has(k)); l.forEach(k=>hepsi?secim.bolum.delete(k):secim.bolum.add(k)); const y=window.scrollY; ciz(); window.scrollTo(0,y); });
+}
+function altCubuk(geriId,ileriId,ileriMetin,aktifMi){
+  return `<div class="alt"><div class="ic"><button class="btn sessiz" id="${geriId}">Geri</button><button class="btn birincil" id="${ileriId}" ${aktifMi?'':'disabled'}>${ileriMetin}</button></div></div>`;
+}
+function listeYok(){
+  return !alanlar.length?`<div class="bos"><b>Alan listesi yükleniyor</b>Liste Google Sheets'teki "Alanlar" sayfasından gelir.</div>`:'';
+}
+function cizKat(){
+  const katlar=tekil(alanlar.map(a=>a.kat));
+  const son=LS.get('sonSecimler',[]);
+  const kartlar=katlar.map(k=>{ const l=alanlar.filter(a=>a.kat===k); const bloklar=tekil(l.map(a=>a.blok)); const servisler=tekil(l.map(a=>a.servis));
+    return secimKarti(k,'kat',k,(bloklar.length?bloklar.join(', ')+' · ':'')+servisler.slice(0,3).join(', ')+(servisler.length>3?' …':'')); }).join('');
+  $('#app').innerHTML=`<div class="kap">${ustBar('Yeni kayıt')}<div class="icerik">${mesaj?`<div class="uyari">${esc(mesaj)}</div>`:''}
+    ${son.length&&alanlar.length?`<div class="grup"><h2>Son seçimler — tek dokunuşla başlat</h2>${son.map((x,i)=>`<button class="alan" data-son="${i}"><span class="ad">${esc(x.etiket)}<br><span style="font-weight:400;font-size:13px;color:var(--soluk)">${esc(x.alt)}</span></span></button>`).join('')}</div>`:''}
+    ${adimBas(1,'Kat seçin')}${listeYok()}${kartlar}</div>
+    ${altCubuk('geri','ileri',secim.kat.size?`Devam · ${secim.kat.size} kat`:'Devam',secim.kat.size)}</div>`;
+  secimBagla();
+  document.querySelectorAll('[data-son]').forEach(b=>b.onclick=()=>{ const x=son[+b.dataset.son]; secim={kat:new Set(x.kat),servis:new Set(x.servis),bolum:new Set(x.bolum)}; if(alanlar.some(a=>secim.servis.has(servisAnahtar(a)))) yeniKayit(secim); else { mesaj='Bu seçimdeki servisler listede artık yok.'; ciz(); } });
+  $('#geri').onclick=()=>{ekran='ana';mesaj='';ciz();};
+  $('#ileri').onclick=()=>{ [...secim.servis].forEach(k=>{ if(!secim.kat.has(k.split(SEP)[0])) secim.servis.delete(k); }); ekran='servis'; ciz(); window.scrollTo(0,0); };
+}
+function cizServis(){
+  const katlar=tekil(alanlar.map(a=>a.kat)).filter(k=>secim.kat.has(k));
+  const govde=katlar.map(k=>{ const gor=new Set(); const l=alanlar.filter(a=>a.kat===k&&!gor.has(servisAnahtar(a))&&gor.add(servisAnahtar(a)));
+    return `<div class="grup"><h2>${esc(k)}</h2>${l.map(a=>{ const bs=tekil(alanlar.filter(x=>servisAnahtar(x)===servisAnahtar(a)).map(x=>x.bolum)); return secimKarti(servisAnahtar(a),'servis',a.servis,bs.length?bs.length+' bölüm':'bölüm tanımlı değil',a.blok); }).join('')}</div>`; }).join('');
+  $('#app').innerHTML=`<div class="kap">${ustBar('Yeni kayıt')}<div class="icerik">${adimBas(2,'Servis seçin')}${govde}</div>
+    ${altCubuk('geri','ileri',secim.servis.size?`Devam · ${secim.servis.size} servis`:'Devam',secim.servis.size)}</div>`;
+  secimBagla();
+  $('#geri').onclick=()=>{ekran='kat';ciz();window.scrollTo(0,0);};
+  $('#ileri').onclick=()=>{ [...secim.bolum].forEach(k=>{ const p=k.split(SEP); if(!secim.servis.has(p.slice(0,3).join(SEP))) secim.bolum.delete(k); });
+    const bolumVar=alanlar.some(a=>a.bolum&&secim.servis.has(servisAnahtar(a)));
+    if(bolumVar){ ekran='bolum'; ciz(); window.scrollTo(0,0); } else yeniKayit(secim); };
+}
+function cizBolum(){
+  const gor=new Set(); const servisler=alanlar.filter(a=>secim.servis.has(servisAnahtar(a))&&!gor.has(servisAnahtar(a))&&gor.add(servisAnahtar(a)));
+  const govde=servisler.map(s=>{ const l=alanlar.filter(a=>servisAnahtar(a)===servisAnahtar(s)&&a.bolum); const baslik=[s.servis,s.kat,s.blok].filter(Boolean).join(' · ');
+    if(!l.length) return `<div class="grup"><h2>${esc(baslik)}</h2><p class="ipucu" style="margin:0 4px 8px">Bölüm tanımlı değil; servis düzeyinde kaydedilir.</p></div>`;
+    const anahtarlar=l.map(bolumAnahtar);
+    return `<div class="grup"><h2 style="display:flex;justify-content:space-between;gap:8px">${esc(baslik)}${l.length>1?`<button class="bag" style="padding:0" data-hepsi='${esc(JSON.stringify(anahtarlar))}'>${anahtarlar.every(k=>secim.bolum.has(k))?'Hiçbiri':'Tümü'}</button>`:''}</h2>${l.map(a=>secimKarti(bolumAnahtar(a),'bolum',a.bolum,'',a.tip)).join('')}</div>`; }).join('');
+  $('#app').innerHTML=`<div class="kap">${ustBar('Yeni kayıt')}<div class="icerik">${adimBas(3,'Bölüm seçin')}
+    <p class="ipucu">Bölüm seçmediğiniz servisler servis düzeyinde kaydedilir.</p>${govde}</div>
+    ${altCubuk('geri','ileri',secim.bolum.size?`Kaydı başlat · ${secim.bolum.size} bölüm`:'Servis düzeyinde başlat',true)}</div>`;
+  secimBagla();
+  $('#geri').onclick=()=>{ekran='servis';ciz();window.scrollTo(0,0);};
+  $('#ileri').onclick=()=>yeniKayit(secim);
 }
 
 function micBtn(hedef,boyut,etiket){
@@ -309,7 +383,8 @@ function micBtn(hedef,boyut,etiket){
 function cizKayit(){
   const a=aktif; const acik=k=>kayit&&kayit.hedef===k;
   const parcaHtml=(p,i,tur)=>`<div class="parca"><p>${esc(p.metin)||'<span class="ara">(yalnız ses kaydı)</span>'}${p.ses?` <span class="ara">· ${p.ses.sure} sn ses</span>`:''}</p><button class="sil" data-sil="${tur}" data-i="${i}" aria-label="Sil">×</button></div>`;
-  $('#app').innerHTML=`<div class="kap">${ustBar(esc(a.alan),`<span class="rozet">${esc(a.acilis)}</span>`)}
+  $('#app').innerHTML=`<div class="kap">${ustBar(esc(a.baslik||a.alan),`<span class="rozet">${esc(a.acilis)}</span>`)}
+  ${a.altBaslik||a.servis?`<div class="kapsam">${a.kat?`<b>${esc(a.kat)}</b> · `:''}${esc(a.servis||a.alan)}${a.bolum?` — ${esc(a.bolum)}`:''}</div>`:''}
   <div class="icerik">${a.uyari?`<div class="uyari">${esc(a.uyari)}</div>`:''}
     <div class="durumSatir" style="margin:0 2px 10px">Metne çevirme: ${SR?'açık':'<b style="color:var(--kirmizi)">bu tarayıcıda yok</b>'} · Ses dosyası: ${sesDosyasiAcik()?'saklanıyor':'saklanmıyor'}</div>
     <div class="blok"><div class="blok-bas"><b>Konum detayı</b><span>kısa: oda, dolap, cihaz</span></div>
@@ -351,7 +426,7 @@ function cizAyar(){
 
 // ---------- Başlat ----------
 (async()=>{
-  const t=LS.get('taslak',null); if(t){ aktif=t; ekran='kayit'; }
+  const t=LS.get('taslak',null); if(t){ aktif=t; if(!aktif.servis&&aktif.alan){aktif.servis=aktif.alan;aktif.baslik=aktif.alan;} ekran='kayit'; }
   try{ const q=await DB.hepsi(); kuyrukSayisi=q.length; const ids=new Set(q.map(x=>x.id)); gecmis.forEach(g=>{ if(g.durum==='hata'&&ids.has(g.id)){g.durum='bekliyor';g.hata='';} }); LS.set('gecmis',gecmis); }catch(e){}
   ciz(); alanlariGetir(); gonder();
   window.addEventListener('online',()=>{ciz();gonder();}); window.addEventListener('offline',ciz);
