@@ -241,10 +241,18 @@ async function gonder(){
     for(const p of liste){
       const g=gecmis.find(x=>x.id===p.id);
       try{
-        const r=await fetch(s.api,{method:'POST',body:JSON.stringify({token:s.token,action:'kayit',kayit:p})});
-        const j=await r.json();
+        // Google, tarayıcıda birden çok hesap açıkken POST isteğini zaman zaman boş GET'e çevirebiliyor;
+        // bu durumda sunucu "Yetkisiz erişim" döner. Birkaç kez yeniden dene.
+        let j={};
+        for(let deneme=0;deneme<4;deneme++){
+          const r=await fetch(s.api,{method:'POST',body:JSON.stringify({token:s.token,action:'kayit',kayit:p})});
+          j=await r.json();
+          if(j.ok||!/Yetkisiz/i.test(j.hata||'')) break;
+          await new Promise(x=>setTimeout(x,1500*(deneme+1)));
+        }
+        if(!j.ok&&/Yetkisiz/i.test(j.hata||'')){ if(g){g.durum='bekliyor';g.hata='';} LS.set('gecmis',gecmis); break; }
         if(j.ok){ await DB.sil(p.id); if(g){g.durum='ok';g.satir=j.satir;g.islenen=`${j.foto??'?'} foto, ${j.ses??'?'} ses`;} }
-        else { if(g){g.durum='hata';g.hata=j.hata;} if(/Yetkisiz/.test(j.hata||'')) break; }
+        else { if(g){g.durum='hata';g.hata=j.hata;} }
       }catch(e){ if(g){g.durum='bekliyor';} break; } // bağlantı yok: sonra tekrar
       LS.set('gecmis',gecmis); kuyrukSayisi=(await DB.hepsi()).length; ciz();
     }
@@ -344,7 +352,7 @@ function cizAyar(){
 // ---------- Başlat ----------
 (async()=>{
   const t=LS.get('taslak',null); if(t){ aktif=t; ekran='kayit'; }
-  try{ kuyrukSayisi=(await DB.hepsi()).length; }catch(e){}
+  try{ const q=await DB.hepsi(); kuyrukSayisi=q.length; const ids=new Set(q.map(x=>x.id)); gecmis.forEach(g=>{ if(g.durum==='hata'&&ids.has(g.id)){g.durum='bekliyor';g.hata='';} }); LS.set('gecmis',gecmis); }catch(e){}
   ciz(); alanlariGetir(); gonder();
   window.addEventListener('online',()=>{ciz();gonder();}); window.addEventListener('offline',ciz);
   document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible') gonder(); });
