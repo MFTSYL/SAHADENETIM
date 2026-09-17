@@ -66,7 +66,18 @@ input[type=file]{display:none}
 .ayar label{font-weight:600;font-size:15px}
 .anahtar{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 0;border-top:1px solid var(--cizgi)}
 .anahtar input{width:26px;height:26px;accent-color:var(--ana)}
-.bag{color:var(--ana);font-weight:600;padding:10px 4px}
+.cip.r-Az.secili{background:#2F8F5B;border-color:#2F8F5B}
+.cip.r-Orta.secili{background:#C98A0B;border-color:#C98A0B}
+.cip.r-Yüksek.secili{background:var(--kirmizi);border-color:var(--kirmizi)}
+.cip.e-Bireysel.secili{background:#2F8F5B;border-color:#2F8F5B}
+.cip.e-Sistemsel.secili{background:#C98A0B;border-color:#C98A0B}
+.cip.a-H.secili{background:#2F8F5B;border-color:#2F8F5B}
+.cip.a-E.secili{background:var(--kirmizi);border-color:var(--kirmizi)}
+.cip{min-height:52px;padding:0 12px;border-radius:12px;border:1.5px solid var(--cizgi);background:#fff;font-weight:600;font-size:15px;flex:1}
+.cip.secili{background:var(--ana);border-color:var(--ana);color:#fff}
+.cip small{display:block;font-weight:400;font-size:11px;opacity:.85}
+.cipler{display:flex;flex-wrap:wrap;gap:8px}
+.deger-blok .blok-bas b{font-size:15px}
 .arama{width:100%;min-height:48px;border:1.5px solid var(--cizgi);border-radius:12px;padding:0 14px;font:inherit;background:#fff;margin-bottom:10px}
 .filtreler{display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;margin:0 -2px;scrollbar-width:none}
 .filtre{flex:none;padding:8px 13px;border-radius:20px;background:#fff;border:1.5px solid var(--cizgi);font-size:14px;font-weight:600;color:var(--soluk)}
@@ -116,6 +127,8 @@ input[type=file]{display:none}
 .secim .metin{flex:1;min-width:0}.secim .metin b{display:block;font-size:16px}.secim .metin span{display:block;font-size:13px;color:var(--soluk);margin-top:2px}
 .secim.on{border-color:var(--ana);background:var(--ana2)}
 .secim.on .kutu{background:var(--ana);border-color:var(--ana)}
+.deger-alt{font-size:13px;color:var(--soluk);font-weight:600;margin:12px 0 6px}
+.deger-blok .deger-alt:first-of-type{margin-top:0}
 .kapsam{margin:10px 12px 0;font-size:14px;background:var(--kart);border:1px solid var(--cizgi);border-radius:10px;padding:8px 12px;color:var(--ink)}
 .kameraEkran{position:fixed;inset:0;z-index:30;background:#000;display:flex;flex-direction:column}
 .kameraEkran video{flex:1;width:100%;object-fit:cover;min-height:0}
@@ -210,7 +223,7 @@ async function sesDurdur(){
   if(k.parcalar.length){ const blob=new Blob(k.parcalar,{type:k.recorder.mimeType||'audio/webm'}); ses={mime:blob.type.split(';')[0],uzanti:blob.type.includes('mp4')?'m4a':'webm',data:await b64(blob),sure:Math.round((Date.now()-k.baslangic)/1000)}; }
   if(!metin&&!ses) return;
   const parca={metin,ses,saat:saat()};
-  if(k.hedef==='konum') aktif.konum=parca; else aktif.gozlem.push(parca);
+  if(k.hedef==='konum') aktif.konum=parca; else if(k.hedef==='kime') aktif.acilKime=parca.metin; else aktif.gozlem.push(parca);
   taslakSakla();
 }
 const b64=blob=>new Promise(r=>{const f=new FileReader();f.onload=()=>r(String(f.result).split(',')[1]);f.readAsDataURL(blob);});
@@ -290,6 +303,7 @@ async function kaydiKapat(){
     kat:aktif.kat,blok:aktif.blok,servis:aktif.servis||aktif.alan,bolum:aktif.bolum||'',alan:aktif.alan,alanTipi:aktif.alanTipi,
     konumDetay:aktif.konum?aktif.konum.metin:'',
     gozlem:aktif.gozlem.map(p=>p.metin).filter(Boolean).join('\n'),
+    tip:aktif.tip||'',siklik:aktif.siklik||'',etki:aktif.etki||'',risk:aktif.risk||'',acil:aktif.acil||'',acilKime:aktif.acilKime||'',
     fotolar:aktif.fotolar.map(({mime,uzanti,data,kucuk})=>({mime,uzanti,data,kucuk})),
     sesler:[aktif.konum,...aktif.gozlem].filter(p=>p&&p.ses).map(p=>({mime:p.ses.mime,uzanti:p.ses.uzanti,data:p.ses.data})),
     cihaz:navigator.userAgent.includes('iPhone')?'iPhone':/Android/.test(navigator.userAgent)?'Android':'Bilgisayar'};
@@ -519,6 +533,10 @@ window.addEventListener('popstate',()=>{
   else if(ekran==='liste'){ ekran='ana'; ciz(); }
 });
 
+function ciplerAlan(alan,secenekler,onEk=''){
+  return `<div class="cipler">${secenekler.map(([d,e,alt])=>`<button class="cip ${onEk?onEk+d:''} ${taslakDeger(alan)===d?'secili':''}" data-deger-alan="${alan}" data-deger="${d}">${e}${alt?`<small>${alt}</small>`:''}</button>`).join('')}</div>`;
+}
+const taslakDeger=alan=>aktif?aktif[alan]:undefined;
 function micBtn(hedef,boyut,etiket){
   const acik=kayit&&kayit.hedef===hedef;
   return `<button class="mik ${boyut} ${acik?'kayitta':''}" data-mik="${hedef}">${acik?'<span class="nabiz"></span> Durdur':MIK+' '+etiket}</button>`;
@@ -543,9 +561,22 @@ function cizKayit(){
       <div style="display:flex;gap:8px"><button class="mik kucuk" id="fotoBtn" style="background:#2E4057;flex:1">${KAM} Kamera</button><button class="mik kucuk" id="galeriBtn" style="background:#fff;color:#2E4057;border:1.5px solid #2E4057;flex:1">${GAL} Galeri</button></div>
       ${a.fotolar.length?`<div class="fotolar">${a.fotolar.map((f,i)=>`<div class="foto"><img src="data:image/jpeg;base64,${f.kucuk||f.data}" alt="Tespit fotoğrafı ${i+1}"><button class="sil" data-sil="foto" data-i="${i}" aria-label="Fotoğrafı sil">×</button></div>`).join('')}</div>`:''}
     </div>
+    <div class="blok deger-blok"><div class="blok-bas"><b>Ön değerlendirme</b><span>isteğe bağlı · sahada</span></div>
+      <div class="deger-alt">Bulgu tipi</div>${ciplerAlan('tip',[['F','Fiziksel'],['U','Uygulama'],['K','Kayıt'],['C','Cihaz']])}
+      <div class="deger-alt">Sıklık</div>${ciplerAlan('siklik',[['Az','Az','tekil'],['Orta','Orta','aynı alanda tekrar'],['Yüksek','Yüksek','birden çok alan']],'r-')}
+      <div class="deger-alt">Etki alanı</div>${ciplerAlan('etki',[['Bireysel','Bireysel'],['Sistemsel','Sistemsel']],'e-')}
+      <div class="deger-alt">Risk düzeyi</div>${ciplerAlan('risk',[['Az','Az'],['Orta','Orta'],['Yüksek','Yüksek']],'r-')}
+      <div class="deger-alt">Hemen müdahale</div>${ciplerAlan('acil',[['H','Hayır'],['E','Evet']],'a-')}
+      ${a.acil==='E'?`<div class="parca" style="margin-top:8px"><p>${a.acilKime?esc(a.acilKime):'<span class="ara">Kime bildirildi?</span>'}</p></div>
+        ${micBtn('kime','kucuk',a.acilKime?'Yeniden söyle':'Kime bildirildi, söyle')}
+        <div class="bilgi">Sorumluya yerinde bildirin; bu işaret SAS kararından ayrıdır.</div>`:''}
+      ${acik('kime')?`<div class="parca"><p id="canli"></p></div>`:''}
+    </div>
   </div>
   <div class="alt"><div class="ic"><button class="btn sessiz" id="vazgec">Vazgeç</button><button class="btn birincil" id="kapat" ${(!a.gozlem.length&&!a.fotolar.length&&!acik('gozlem'))?'disabled':''}>Kaydı kapat</button></div></div></div>`;
   canliYaz();
+  document.querySelectorAll('[data-deger-alan]').forEach(b=>b.onclick=()=>{ const al=b.dataset.degerAlan,d=b.dataset.deger;
+    a[al]=a[al]===d?undefined:d; if(al==='acil'&&a.acil!=='E') a.acilKime=''; taslakSakla(); const y=window.scrollY; cizKayit(); window.scrollTo(0,y); });
   document.querySelectorAll('[data-mik]').forEach(b=>b.onclick=async()=>{ const h=b.dataset.mik; if(kayit&&kayit.hedef===h){await sesDurdur();ciz();} else sesBaslat(h); });
   $('#fotoBtn').onclick=kameraAc;
   $('#galeriBtn').onclick=()=>{ if(kayit){ sesDurdur().then(ciz); } $('#galeri').click(); };
