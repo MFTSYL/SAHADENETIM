@@ -127,6 +127,17 @@ input[type=file]{display:none}
 .secim .metin{flex:1;min-width:0}.secim .metin b{display:block;font-size:16px}.secim .metin span{display:block;font-size:13px;color:var(--soluk);margin-top:2px}
 .secim.on{border-color:var(--ana);background:var(--ana2)}
 .secim.on .kutu{background:var(--ana);border-color:var(--ana)}
+.boyutlar{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.boyut{min-height:52px;border:1.5px solid var(--cizgi);border-radius:12px;background:#fff;font-size:14px;text-align:left;padding:0 12px;font-weight:500}
+.boyut b{font-weight:700;margin-right:4px}
+.boyut.soluk{color:var(--soluk)}
+.kod-liste{display:flex;flex-direction:column;gap:8px}
+.kod-satir{min-height:54px;border:1.5px solid var(--cizgi);border-radius:12px;background:#fff;text-align:left;padding:0 14px;font-size:15px}
+.kod-satir b{font-weight:700;margin-right:6px}.kod-satir span{color:var(--soluk);font-size:14px}
+.kod-ust{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;font-weight:600;color:var(--ink)}
+.kod-secili{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--ana2);border:1.5px solid var(--ana);border-radius:12px;padding:12px 14px}
+.kod-secili b{font-size:17px;color:var(--ana);margin-right:8px}.kod-secili span span{color:var(--ana);font-size:14px}
+.kod-kaldir{min-height:40px;padding:0 12px;border-radius:10px;background:#fff;border:1px solid var(--cizgi);font-size:14px;font-weight:600;color:var(--soluk)}
 .deger-alt{font-size:13px;color:var(--soluk);font-weight:600;margin:12px 0 6px}
 .deger-blok .deger-alt:first-of-type{margin-top:0}
 .kapsam{margin:10px 12px 0;font-size:14px;background:var(--kart);border:1px solid var(--cizgi);border-radius:10px;padding:8px 12px;color:var(--ink)}
@@ -303,7 +314,7 @@ async function kaydiKapat(){
     kat:aktif.kat,blok:aktif.blok,servis:aktif.servis||aktif.alan,bolum:aktif.bolum||'',alan:aktif.alan,alanTipi:aktif.alanTipi,
     konumDetay:aktif.konum?aktif.konum.metin:'',
     gozlem:aktif.gozlem.map(p=>p.metin).filter(Boolean).join('\n'),
-    tip:aktif.tip||'',siklik:aktif.siklik||'',etki:aktif.etki||'',risk:aktif.risk||'',acil:aktif.acil||'',acilKime:aktif.acilKime||'',
+    sas:aktif.sas||'',tip:aktif.tip||'',siklik:aktif.siklik||'',etki:aktif.etki||'',risk:aktif.risk||'',acil:aktif.acil||'',acilKime:aktif.acilKime||'',
     fotolar:aktif.fotolar.map(({mime,uzanti,data,kucuk})=>({mime,uzanti,data,kucuk})),
     sesler:[aktif.konum,...aktif.gozlem].filter(p=>p&&p.ses).map(p=>({mime:p.ses.mime,uzanti:p.ses.uzanti,data:p.ses.data})),
     cihaz:navigator.userAgent.includes('iPhone')?'iPhone':/Android/.test(navigator.userAgent)?'Android':'Bilgisayar'};
@@ -370,6 +381,21 @@ function cizAna(){
   const t=$('#tekrar'); if(t) t.onclick=gonder;
 }
 
+const BOYUTLAR=[['YO','Yönetim'],['PÖ','Performans'],['SÇ','Çalışan'],['HD','Hasta'],['SH','Sağlık hiz.'],['DH','Destek hiz.'],['AD','Acil durum']];
+const SASKOD=[['YO.OY','Organizasyon yapısı'],['YO.PD','Temel politika ve değerler'],['YO.KY','Kalite yönetim yapısı'],['YO.DY','Doküman yönetimi'],['YO.OB','İstenmeyen olay bildirimi'],['YO.RY','Risk yönetimi'],['YO.EY','Eğitim yönetimi'],['YO.Kİ','Kurumsal iletişim'],
+['PÖ.Gİ','Göstergelerin izlenmesi'],['SÇ.İK','İnsan kaynakları'],['SÇ.ÇG','Çalışan sağlığı ve güvenliği'],
+['HD.HH','Temel hasta hakları'],['HD.HG','Hasta güvenliği'],['HD.GB','Hasta geri bildirimleri'],['HD.HE','Hizmete erişim'],['HD.YS','Yaşam sonu hizmetler'],
+['SH.EÖ','Enfeksiyonların önlenmesi'],['SH.SY','Sterilizasyon'],['SH.İY','İlaç yönetimi'],['SH.TY','Transfüzyon'],['SH.HB','Hasta bakımı'],['SH.RG','Radyasyon güvenliği'],['SH.LH','Laboratuvar'],['SH.GC','Güvenli cerrahi'],['SH.AS','Acil sağlık hizmetleri'],
+['DH.OH','Otelcilik hizmetleri'],['DH.TY','Tesis yönetimi'],['DH.AY','Atık yönetimi'],['DH.BY','Bilgi yönetimi'],['DH.MC','Malzeme ve cihaz'],['DH.DK','Dış kaynak kullanımı'],['AD.AD','Acil durum yönetimi']];
+const kodAdi=k=>k==='YOK'?'Kod yok':(SASKOD.find(x=>x[0]===k)||[k,''])[1];
+const ALAN_ONERI={'Tıbbi':['SH.EÖ','SH.HB','HD.HG','SH.İY'],'Genel':['DH.OH','HD.HE','HD.HH','AD.AD'],'Teknik':['DH.TY','AD.AD','DH.MC','SÇ.ÇG']};
+const TIP_ONERI={K:['YO.DY','DH.BY'],C:['DH.MC'],U:[]};
+function kodOnerileri(){
+  const at=String(aktif.alanTipi||'').split(';')[0].trim();
+  const l=[...(TIP_ONERI[aktif.tip]||[]),...(ALAN_ONERI[at]||[]),...(ALAN_ONERI['Genel'])];
+  return [...new Set(l)].slice(0,4);
+}
+let kodBoyut=null;
 const TIK='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L19 7"/></svg>';
 function adimBas(no,baslik){
   return `<div class="adimlar">${['Kat','Servis','Bölüm'].map((x,i)=>`<span class="${i+1===no?'aktif':i+1<no?'bitti':''}">${i+1}. ${x}</span>`).join('')}</div><h2 class="adim-baslik">${baslik}</h2><p class="ipucu">Birden fazla seçebilirsiniz.</p>`;
@@ -572,9 +598,23 @@ function cizKayit(){
         <div class="bilgi">Sorumluya yerinde bildirin; bu işaret SAS kararından ayrıdır.</div>`:''}
       ${acik('kime')?`<div class="parca"><p id="canli"></p></div>`:''}
     </div>
+    <div class="blok"><div class="blok-bas"><b>SAS bölüm kodu</b><span>isteğe bağlı · 32 bölüm</span></div>
+      ${a.sas?`<div class="kod-secili"><span><b>${esc(a.sas==='YOK'?'Kod yok':a.sas)}</b>${a.sas==='YOK'?'':`<span>${esc(kodAdi(a.sas))}</span>`}</span><button class="kod-kaldir" data-kod="">Kaldır</button></div>`
+      :kodBoyut?`<div class="kod-ust"><button class="bag" id="kodGeri" style="padding:0">‹ Boyutlar</button><span>${esc((BOYUTLAR.find(b=>b[0]===kodBoyut)||[])[1]||'')}</span></div>
+        <div class="kod-liste">${SASKOD.filter(x=>x[0].split('.')[0]===kodBoyut).map(([k,ad])=>`<button class="kod-satir" data-kod="${k}"><b>${k}</b> <span>${esc(ad)}</span></button>`).join('')}</div>`
+      :`<div class="deger-alt">Önerilen</div><div class="cipler">${kodOnerileri().map(k=>`<button class="cip" data-kod="${k}" style="flex:0 1 auto">${k}<small>${esc(kodAdi(k))}</small></button>`).join('')}</div>
+        ${LS.get('sonKodlar',[]).length?`<div class="deger-alt">Son kullandıklarınız</div><div class="cipler">${LS.get('sonKodlar',[]).map(k=>`<button class="cip" data-kod="${k}" style="flex:0 1 auto">${k}</button>`).join('')}</div>`:''}
+        <div class="deger-alt">Tüm boyutlar</div><div class="boyutlar">${BOYUTLAR.map(([b,ad])=>`<button class="boyut" data-boyut="${b}"><b>${b}</b> ${esc(ad)}</button>`).join('')}<button class="boyut soluk" data-kod="YOK">Kod yok</button></div>`}
+    </div>
   </div>
   <div class="alt"><div class="ic"><button class="btn sessiz" id="vazgec">Vazgeç</button><button class="btn birincil" id="kapat" ${(!a.gozlem.length&&!a.fotolar.length&&!acik('gozlem'))?'disabled':''}>Kaydı kapat</button></div></div></div>`;
   canliYaz();
+  document.querySelectorAll('[data-kod]').forEach(b=>b.onclick=()=>{ const k=b.dataset.kod;
+    a.sas=k||undefined; kodBoyut=null;
+    if(k&&k!=='YOK'){ const son=LS.get('sonKodlar',[]).filter(x=>x!==k); son.unshift(k); LS.set('sonKodlar',son.slice(0,3)); }
+    taslakSakla(); const y=window.scrollY; cizKayit(); window.scrollTo(0,y); });
+  document.querySelectorAll('[data-boyut]').forEach(b=>b.onclick=()=>{ kodBoyut=b.dataset.boyut; const y=window.scrollY; cizKayit(); window.scrollTo(0,y); });
+  const kg=$('#kodGeri'); if(kg) kg.onclick=()=>{ kodBoyut=null; const y=window.scrollY; cizKayit(); window.scrollTo(0,y); };
   document.querySelectorAll('[data-deger-alan]').forEach(b=>b.onclick=()=>{ const al=b.dataset.degerAlan,d=b.dataset.deger;
     a[al]=a[al]===d?undefined:d; if(al==='acil'&&a.acil!=='E') a.acilKime=''; taslakSakla(); const y=window.scrollY; cizKayit(); window.scrollTo(0,y); });
   document.querySelectorAll('[data-mik]').forEach(b=>b.onclick=async()=>{ const h=b.dataset.mik; if(kayit&&kayit.hedef===h){await sesDurdur();ciz();} else sesBaslat(h); });
