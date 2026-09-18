@@ -73,6 +73,8 @@ input[type=file]{display:none}
 .cip.e-Sistemsel.secili{background:#C98A0B;border-color:#C98A0B}
 .cip.a-H.secili{background:#2F8F5B;border-color:#2F8F5B}
 .cip.a-E.secili{background:var(--kirmizi);border-color:var(--kirmizi)}
+.cip.secili[data-deger="Devam ediyor"]{background:#C98A0B;border-color:#C98A0B}
+.cip.secili[data-deger="Demo"]{background:#5E6B67;border-color:#5E6B67}
 .cip{min-height:52px;padding:0 12px;border-radius:12px;border:1.5px solid var(--cizgi);background:#fff;font-weight:600;font-size:15px;flex:1}
 .cip.secili{background:var(--ana);border-color:var(--ana);color:#fff}
 .cip small{display:block;font-weight:400;font-size:11px;opacity:.85}
@@ -307,7 +309,7 @@ function yeniKayit(sec){
     alanTipi:tekil(kapsam.map(a=>a.tip)).join('; '),
     baslik:(bolumAdlari.length?bolumAdlari:servisAdlari).slice(0,2).join(', ')+((bolumAdlari.length||servisAdlari.length)>2?' +'+((bolumAdlari.length||servisAdlari.length)-2):''),
     altBaslik:katlar.join(', '),
-    konum:null,gozlem:[],fotolar:[],uyari:''};
+    isDurumu:'Devam ediyor',konum:null,gozlem:[],fotolar:[],uyari:''};
   aktif.alan=aktif.servis+(aktif.bolum?' — '+aktif.bolum:'');
   const kayitli={kat:[...sec.kat],servis:[...sec.servis],bolum:[...sec.bolum],etiket:aktif.baslik,alt:aktif.altBaslik};
   const son=LS.get('sonSecimler',[]).filter(x=>x.etiket+x.alt!==kayitli.etiket+kayitli.alt); son.unshift(kayitli); LS.set('sonSecimler',son.slice(0,3));
@@ -321,7 +323,7 @@ async function kaydiKapat(){
     kat:aktif.kat,blok:aktif.blok,servis:aktif.servis||aktif.alan,bolum:aktif.bolum||'',alan:aktif.alan,alanTipi:aktif.alanTipi,
     konumDetay:aktif.konum?aktif.konum.metin:'',
     gozlem:aktif.gozlem.map(p=>p.metin).filter(Boolean).join('\n'),
-    sas:aktif.sas||'',tip:aktif.tip||'',siklik:aktif.siklik||'',etki:aktif.etki||'',risk:aktif.risk||'',acil:aktif.acil||'',acilKime:aktif.acilKime||'',
+    sas:aktif.sas||'',isDurumu:aktif.isDurumu||'Devam ediyor',tip:aktif.tip||'',siklik:aktif.siklik||'',etki:aktif.etki||'',risk:aktif.risk||'',acil:aktif.acil||'',acilKime:aktif.acilKime||'',
     fotolar:aktif.fotolar.map(({mime,uzanti,data,kucuk})=>({mime,uzanti,data,kucuk})),
     sesler:[aktif.konum,...aktif.gozlem].filter(p=>p&&p.ses).map(p=>({mime:p.ses.mime,uzanti:p.ses.uzanti,data:p.ses.data})),
     cihaz:navigator.userAgent.includes('iPhone')?'iPhone':/Android/.test(navigator.userAgent)?'Android':'Bilgisayar'};
@@ -603,6 +605,7 @@ function cizKayit(){
       <div class="deger-alt">Etki alanı</div>${ciplerAlan('etki',[['Bireysel','Bireysel'],['Sistemsel','Sistemsel']],'e-')}
       <div class="deger-alt">Risk düzeyi</div>${ciplerAlan('risk',[['Az','Az'],['Orta','Orta'],['Yüksek','Yüksek']],'r-')}
       <div class="deger-alt">Hemen müdahale</div>${ciplerAlan('acil',[['H','Hayır'],['E','Evet']],'a-')}
+      <div class="deger-alt">İş durumu</div>${ciplerAlan('isDurumu',[['Devam ediyor','Devam ediyor'],['Demo','Demo','deneme kaydı']],'i-')}
       ${a.acil==='E'?`<div class="parca" style="margin-top:8px"><textarea class="duzen" data-duzen="kime" data-i="0" rows="1" placeholder="Kime bildirildi?">${esc(a.acilKime||'')}</textarea></div>
         <div class="ikili">${micBtn('kime','kucuk',a.acilKime?'Yeniden söyle':'Kime bildirildi, söyle')}${klavyeBtn('kime')}</div>
         <div class="bilgi">Sorumluya yerinde bildirin; bu işaret SAS kararından ayrıdır.</div>`:''}
@@ -626,7 +629,7 @@ function cizKayit(){
   document.querySelectorAll('[data-boyut]').forEach(b=>b.onclick=()=>{ kodBoyut=b.dataset.boyut; const y=window.scrollY; cizKayit(); window.scrollTo(0,y); });
   const kg=$('#kodGeri'); if(kg) kg.onclick=()=>{ kodBoyut=null; const y=window.scrollY; cizKayit(); window.scrollTo(0,y); };
   document.querySelectorAll('[data-deger-alan]').forEach(b=>b.onclick=()=>{ const al=b.dataset.degerAlan,d=b.dataset.deger;
-    a[al]=a[al]===d?undefined:d; if(al==='acil'&&a.acil!=='E') a.acilKime=''; taslakSakla(); const y=window.scrollY; cizKayit(); window.scrollTo(0,y); });
+    a[al]=(a[al]===d&&al!=='isDurumu')?undefined:d; if(al==='acil'&&a.acil!=='E') a.acilKime=''; taslakSakla(); const y=window.scrollY; cizKayit(); window.scrollTo(0,y); });
   document.querySelectorAll('[data-mik]').forEach(b=>b.onclick=async()=>{ const h=b.dataset.mik; if(kayit&&kayit.hedef===h){await sesDurdur();ciz();} else sesBaslat(h); });
   $('#fotoBtn').onclick=kameraAc;
   $('#galeriBtn').onclick=()=>{ if(kayit){ sesDurdur().then(ciz); } $('#galeri').click(); };
