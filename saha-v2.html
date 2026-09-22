@@ -73,6 +73,8 @@ const LS={get:(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch(e)
 const ayar=()=>({api:LS.get('api',''),token:LS.get('token',''),denetci:LS.get('denetci','')});
 
 let ekran='liste', kayitlar=[], secili=null, taslak=null, mesaj='', yukleniyor=false;
+let olcutler=[], birimler=[], secimEkrani=null;
+const SAS_ADLARI={'YO.OY':'Organizasyon Yapısı','YO.PD':'Temel Politika ve Değerler','YO.KY':'Kalite Yönetim Yapısı','YO.DY':'Doküman Yönetimi','YO.OB':'İstenmeyen Olay Bildirimi','YO.RY':'Risk Yönetimi','YO.EY':'Eğitim Yönetimi','YO.Kİ':'Kurumsal İletişim','PÖ.Gİ':'Göstergelerin İzlenmesi','SÇ.İK':'İnsan Kaynakları','SÇ.ÇG':'Çalışan Sağlığı ve Güvenliği','HD.HH':'Temel Hasta Hakları','HD.HG':'Hasta Güvenliği','HD.GB':'Hasta Geri Bildirimleri','HD.HE':'Hizmete Erişim','HD.YS':'Yaşam Sonu Hizmetler','SH.EÖ':'Enfeksiyonların Önlenmesi','SH.SY':'Sterilizasyon','SH.İY':'İlaç Yönetimi','SH.TY':'Transfüzyon','SH.HB':'Hasta Bakımı','SH.RG':'Radyasyon Güvenliği','SH.LH':'Laboratuvar','SH.GC':'Güvenli Cerrahi','SH.AS':'Acil Sağlık Hizmetleri','DH.OH':'Otelcilik','DH.TY':'Tesis Yönetimi','DH.AY':'Atık Yönetimi','DH.BY':'Bilgi Yönetimi','DH.MC':'Malzeme ve Cihaz','DH.DK':'Dış Kaynak Kullanımı','AD.AD':'Acil Durum Yönetimi'};
 let filtre='tum', arama='', kullanici=null, raporFiltre={};
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -109,6 +111,12 @@ async function kayitlariGetir(){
       .filter(k=>k['Kayıt ID'] && k['İş durumu']!=='Demo')
       .sort((a,b)=>(zaman(b['Son düzenleme'])||zaman(b['Sisteme alındı'])||zaman(b['Tarih']))-(zaman(a['Son düzenleme'])||zaman(a['Sisteme alındı'])||zaman(a['Tarih'])));
     mesaj='';
+    try{
+      const l=await db.collection('listeler').limit(1000).get();
+      const hepsi=l.docs.map(d=>d.data());
+      olcutler=hepsi.filter(x=>x.tur==='olcut');
+      birimler=hepsi.filter(x=>x.tur==='birim').map(x=>x.ad).filter(Boolean);
+    }catch(e){ /* listeler yoksa seçim ekranları elle yazmaya düşer */ }
   }catch(e){ mesaj='Kayıtlar okunamadı: '+e.message; }
   yukleniyor=false; ciz();
 }
@@ -116,11 +124,86 @@ async function kayitlariGetir(){
 async function sunucuya(govde){
   const s=ayar();
   const r=await fetch(s.api,{method:'POST',body:JSON.stringify({token:s.token,...govde})});
-  return r.json();
+  const metin=await r.text();
+  try{ return JSON.parse(metin); }
+  catch(e){
+    const temiz=metin.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim().slice(0,160);
+    return { ok:false, hata:'Sunucu yanıtı okunamadı ('+r.status+'): '+temiz };
+  }
+}
+
+// ---------- Sesle yazdırma ----------
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+let tanima=null, tanimaHedef=null;
+function sesBaslat(hedefId){
+  if(!SR){ mesaj='Bu tarayıcı sesten yazıya çevirmeyi desteklemiyor.'; ciz(); return; }
+  if(tanima){ sesDurdur(); return; }
+  const el=document.getElementById(hedefId); if(!el) return;
+  tanimaHedef=hedefId;
+  const t=new SR(); t.lang='tr-TR'; t.continuous=false; t.interimResults=true;
+  let eklenen='';
+  t.onresult=ev=>{ let ara='';
+    for(let i=ev.resultIndex;i<ev.results.length;i++){ const r=ev.results[i];
+      if(r.isFinal){ eklenen+=(eklenen?' ':'')+r[0].transcript.trim(); } else ara+=r[0].transcript; }
+    el.value=(el.dataset.baslangic||'')+(el.dataset.baslangic?' ':'')+eklenen+(ara?' '+ara:'');
+  };
+  t.onend=()=>{ if(tanima===t){ try{ t.start(); }catch(e){ } } };
+  el.dataset.baslangic=el.value.trim();
+  try{ t.start(); tanima=t; }catch(e){ mesaj='Mikrofon başlatılamadı.'; }
+  const btn=document.querySelector('[data-mik="'+hedefId+'"]'); if(btn){ btn.textContent='■ Durdur'; btn.style.background='var(--kirmizi)'; btn.style.color='#fff'; }
+}
+function sesDurdur(){
+  if(!tanima) return;
+  const t=tanima; tanima=null;
+  try{ t.onend=null; t.stop(); }catch(e){}
+  const btn=document.querySelector('[data-mik="'+tanimaHedef+'"]'); if(btn){ btn.textContent='🎤 Sesle yaz'; btn.style.background=''; btn.style.color=''; }
+  tanimaHedef=null;
+}
+const mikBtn=id=>`<button class="cip" data-mik="${id}" style="flex:none;margin-top:6px">🎤 Sesle yaz</button>`;
+
+// ---------- Seçim ekranı (SAS, DÖ, sorumlu birim) ----------
+function secimAc(tur){ secimEkrani={tur, secili:[], ara:''};
+  if(tur==='DÖ kodu') secimEkrani.secili=String(taslak['DÖ kodu']||'').split(';').map(x=>x.trim()).filter(Boolean);
+  if(tur==='Sorumlu birim') secimEkrani.secili=String(taslak['Sorumlu birim']||'').split(';').map(x=>x.trim()).filter(Boolean);
+  cizSecim();
+}
+function secimSecenekleri(){
+  const s=secimEkrani;
+  if(s.tur==='SAS kodu') return Object.keys(SAS_ADLARI).map(k=>({kod:k,metin:SAS_ADLARI[k]})).concat([{kod:'Kod yok',metin:'masa başında belirlenecek'}]);
+  if(s.tur==='DÖ kodu'){ const bolum=String(taslak['SAS kodu']||'').trim();
+    const l=olcutler.filter(o=>o.olcutTuru!=='Standart' && (!bolum||o.bolum===bolum));
+    return (l.length?l:olcutler).map(o=>({kod:o.kod,metin:o.metin||''}));
+  }
+  return birimler.map(b=>({kod:b,metin:''}));
+}
+function cizSecim(){
+  const s=secimEkrani, coklu=(s.tur!=='SAS kodu');
+  const ara=s.ara.toLocaleLowerCase('tr');
+  const l=secimSecenekleri().filter(x=>!ara||(x.kod+' '+x.metin).toLocaleLowerCase('tr').includes(ara)).slice(0,300);
+  $('#app').innerHTML=`<div class="kap">${ustBar(s.tur+' seç')}
+  <div class="icerik">
+    <input class="arama" id="secimAra" placeholder="Ara" value="${esc(s.ara)}">
+    ${coklu&&s.secili.length?`<div class="blok"><h3>Seçili (${s.secili.length}) — kaldırmak için dokunun</h3>
+      ${s.secili.map(k=>`<button class="cip secili" data-cikar="${esc(k)}" style="flex:none;width:100%;text-align:left;margin-bottom:6px">✓ ${esc(k)}</button>`).join('')}</div>`:''}
+    ${l.map(x=>`<button class="kart" data-sec="${esc(x.kod)}"><span class="omurga" style="background:${s.secili.indexOf(x.kod)>=0?'var(--ana)':'var(--cizgi)'}"></span><span class="ic2">
+      <span class="ust"><b>${esc(x.kod)}</b></span>${x.metin?`<span class="goz">${esc(x.metin)}</span>`:''}</span></button>`).join('')
+      ||`<div class="bos"><b>Seçenek yok</b>Listeler henüz aynalanmamış olabilir.</div>`}
+  </div>
+  <div class="alt"><div class="ic"><button class="btn sessiz" id="vazgecSecim">Vazgeç</button>${coklu?`<button class="btn birincil" id="yazSecim">Seçilenleri yaz</button>`:''}</div></div></div>`;
+  $('#secimAra').oninput=e=>{s.ara=e.target.value;const p=e.target.selectionStart;cizSecim();const a=$('#secimAra');a.focus();a.setSelectionRange(p,p);};
+  document.querySelectorAll('[data-sec]').forEach(b=>b.onclick=()=>{
+    const k=b.dataset.sec;
+    if(!coklu){ taslak['SAS kodu']=k==='Kod yok'?'Kod yok':k; taslak['DÖ kodu']=''; secimEkrani=null; cizDuzenle(); return; }
+    const i=s.secili.indexOf(k); if(i>=0) s.secili.splice(i,1); else s.secili.push(k); cizSecim();
+  });
+  document.querySelectorAll('[data-cikar]').forEach(b=>b.onclick=()=>{ const i=s.secili.indexOf(b.dataset.cikar); if(i>=0)s.secili.splice(i,1); cizSecim(); });
+  $('#vazgecSecim').onclick=()=>{ secimEkrani=null; cizDuzenle(); };
+  const y=$('#yazSecim'); if(y) y.onclick=()=>{ taslak[s.tur]=s.secili.join('; '); secimEkrani=null; cizDuzenle(); };
 }
 
 // ---------- Ekranlar ----------
-function ciz(){ ({giris:cizGiris,liste:cizListe,rapor:cizRapor,duzenle:cizDuzenle,raporla:cizRaporla})[kullanici?ekran:'giris'](); }
+function ciz(){ if(kullanici && secimEkrani) return cizSecim();
+  ({giris:cizGiris,liste:cizListe,rapor:cizRapor,duzenle:cizDuzenle,raporla:cizRaporla})[kullanici?ekran:'giris'](); }
 function ustBar(baslik,sag=''){
   return `<header><div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><h1>${baslik}</h1>${sag}</div>
     <div class="alt-bilgi">${esc(LS.get('eposta','')||'')}${kayitlar.length?' · '+kayitlar.length+' kayıt':''}</div></header>`;
@@ -203,17 +286,24 @@ function cizDuzenle(){
   <div class="icerik">
     ${eski?`<div class="uyari">Bu kayıt en son ${esc(secili['Son düzenleyen']||'bilinmiyor')} tarafından ${esc(eski)} tarihinde güncellendi.</div>`:''}
     ${mesaj?`<div class="uyari ${mesaj.indexOf('kaydedildi')>=0?'iyi':''}">${esc(mesaj)}</div>`:''}
-    <div class="blok"><label>Gözlem</label><textarea id="gozlem">${esc(t['Gözlem (ses dökümü)']||'')}</textarea>
-      <label>Konum detayı</label><input id="konum" value="${esc(t['Konum detayı (ses)']||'')}"></div>
+    <div class="blok"><label>Gözlem</label><textarea id="gozlem">${esc(t['Gözlem (ses dökümü)']||'')}</textarea>${mikBtn('gozlem')}
+      <label>Konum detayı</label><input id="konum" value="${esc(t['Konum detayı (ses)']||'')}">${mikBtn('konum')}</div>
     <div class="blok"><h3>Değerlendirme</h3>
       <label>Bulgu tipi</label>${cipSeti('Bulgu tipi',['Fiziksel','Uygulama','Kayıt','Cihaz'])}
       <label>Sıklık</label>${cipSeti('Sıklık',['Az','Orta','Yüksek'],'r-')}
       <label>Etki</label>${cipSeti('Etki',['Bireysel','Sistemsel'])}
       <label>Risk</label>${cipSeti('Risk',['Az','Orta','Yüksek'],'r-')}
       <label>Hemen müdahale</label>${cipSeti('Hemen müdahale',['Hayır','Evet'])}
-      <label>SAS kodu</label><input id="sas" value="${esc(t['SAS kodu']||'')}" placeholder="örn. SH.İY">
-      <label>DÖ kodu</label><input id="do" value="${esc(t['DÖ kodu']||'')}" placeholder="örn. SH.İY.01.05; SH.İY.01.08"></div>
+      <label>SAS kodu</label>
+      <button class="cip" data-sec-ac="SAS kodu" style="width:100%;text-align:left">${t['SAS kodu']?esc(t['SAS kodu'])+(SAS_ADLARI[t['SAS kodu']]?' — '+esc(SAS_ADLARI[t['SAS kodu']]):''):'Seçmek için dokunun'}</button>
+      <label>DÖ kodu</label>
+      <button class="cip" data-sec-ac="DÖ kodu" style="width:100%;text-align:left">${t['DÖ kodu']?esc(t['DÖ kodu']):'Seçmek için dokunun'}</button>
+      <button class="cip" id="oneriBtn" style="width:100%;margin-top:8px;background:var(--ana2);color:var(--ana);border-color:var(--ana2)">Gözleme göre kod öner</button>
+      <div id="oneriler"></div></div>
     <div class="blok"><h3>Takip</h3>
+      <label>Sorumlu birim</label>
+      <button class="cip" data-sec-ac="Sorumlu birim" style="width:100%;text-align:left">${t['Sorumlu birim']?esc(t['Sorumlu birim']):'Seçmek için dokunun'}</button>
+      <label>Termin</label><input id="termin" value="${esc(t['Termin']||'')}" placeholder="örn. 31.10.2026">
       <label>İş durumu</label>${cipSeti('İş durumu',['Devam ediyor','Tamamlandı','Ertelendi'])}
       <label>Durum</label>${cipSeti('Durum',['Açık','Değerlendirmede','DÖF açıldı','Kapatıldı'])}
       <label>Not</label><textarea id="not" style="min-height:70px">${esc(t['Not']||'')}</textarea></div>
@@ -224,12 +314,32 @@ function cizDuzenle(){
     const y=window.scrollY; cizDuzenle(); window.scrollTo(0,y);
   });
   const oku=()=>{ t['Gözlem (ses dökümü)']=$('#gozlem').value; t['Konum detayı (ses)']=$('#konum').value;
-    t['SAS kodu']=$('#sas').value.trim(); t['DÖ kodu']=$('#do').value.trim(); t['Not']=$('#not').value; };
+    t['Termin']=$('#termin').value.trim(); t['Not']=$('#not').value; };
+  document.querySelectorAll('[data-mik]').forEach(b=>b.onclick=()=>{ const id=b.dataset.mik;
+    if(tanima&&tanimaHedef===id) sesDurdur(); else { sesDurdur(); sesBaslat(id); } });
+  document.querySelectorAll('[data-sec-ac]').forEach(b=>b.onclick=()=>{ oku(); sesDurdur(); secimAc(b.dataset.secAc); });
+  $('#oneriBtn').onclick=async()=>{
+    oku(); const kutu=$('#oneriler'); kutu.innerHTML='<p style="font-size:14px;color:var(--soluk)">Öneriler hazırlanıyor…</p>';
+    try{
+      const j=await sunucuya({action:'oneri',metin:(t['Gözlem (ses dökümü)']||'')+' '+(t['Konum detayı (ses)']||''),bolum:t['SAS kodu']||''});
+      if(!j.ok||!j.oneriler||!j.oneriler.length){ kutu.innerHTML='<p style="font-size:14px;color:var(--soluk)">Uygun öneri bulunamadı'+(j.hata?': '+esc(j.hata):'')+'</p>'; return; }
+      kutu.innerHTML='<p style="font-size:12px;color:var(--soluk);margin:10px 0 6px">Öneriler — dokunarak ekleyin (gözden geçirin)</p>'+
+        j.oneriler.map(o=>`<button class="kart" data-oneri="${esc(o.kod)}" data-bolum="${esc(o.bolum)}"><span class="omurga" style="background:var(--ana2)"></span><span class="ic2">
+          <span class="ust"><b>${esc(o.kod)}</b></span><span class="goz">${esc(o.metin)}</span></span></button>`).join('');
+      document.querySelectorAll('[data-oneri]').forEach(b=>b.onclick=()=>{
+        if(!t['SAS kodu']) t['SAS kodu']=b.dataset.bolum;
+        const mevcut=String(t['DÖ kodu']||'').split(';').map(x=>x.trim()).filter(Boolean);
+        if(mevcut.indexOf(b.dataset.oneri)<0) mevcut.push(b.dataset.oneri);
+        t['DÖ kodu']=mevcut.join('; ');
+        const y=window.scrollY; cizDuzenle(); window.scrollTo(0,y);
+      });
+    }catch(e){ kutu.innerHTML='<p style="font-size:14px;color:var(--kirmizi)">Öneri alınamadı: '+esc(e.message)+'</p>'; }
+  };
   $('#vazgec').onclick=()=>{ekran='rapor';mesaj='';ciz();};
   $('#kaydet').onclick=async()=>{
-    oku(); $('#kaydet').disabled=true; mesaj='Kaydediliyor…'; ciz();
+    oku(); sesDurdur(); $('#kaydet').disabled=true; mesaj='Kaydediliyor…'; ciz();
     const alanlar={};
-    ['Gözlem (ses dökümü)','Konum detayı (ses)','SAS kodu','DÖ kodu','Bulgu tipi','Sıklık','Etki','Risk','Hemen müdahale','Durum','İş durumu','Not']
+    ['Gözlem (ses dökümü)','Konum detayı (ses)','SAS kodu','DÖ kodu','Bulgu tipi','Sıklık','Etki','Risk','Hemen müdahale','Sorumlu birim','Termin','Durum','İş durumu','Not']
       .forEach(a=>alanlar[a]=t[a]||'');
     try{
       const j=await sunucuya({action:'duzenle',kayit:{id:t['Kayıt ID'],alanlar}});
