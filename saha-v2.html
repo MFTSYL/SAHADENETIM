@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="tr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes"><meta name="theme-color" content="#0E6655">
+<title>Saha Denetimi — Kayıtlar</title>
+<style>
+:root{--bg:#EEF3F1;--kart:#FFF;--ink:#16211D;--soluk:#5D6A66;--cizgi:#CFD9D5;--ana:#0E6655;--ana2:#DDEFEA;--kirmizi:#B83A26;--sari:#C98A0B;--yesil:#2F8F5B}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
+.kap{max-width:640px;margin:0 auto;min-height:100vh;padding-bottom:120px}
+header{position:sticky;top:0;z-index:5;background:var(--ana);color:#fff;padding:calc(12px + env(safe-area-inset-top)) 16px 12px}
+header h1{margin:0;font-size:19px}.alt-bilgi{font-size:13px;opacity:.85;margin-top:4px}
+.icerik{padding:12px}
+.alt{position:fixed;left:0;right:0;bottom:0;background:var(--kart);border-top:1px solid var(--cizgi);padding:10px 12px calc(10px + env(safe-area-inset-bottom))}
+.alt .ic{max-width:640px;margin:0 auto;display:flex;gap:10px}
+.btn{flex:1;min-height:58px;border-radius:14px;font-weight:700;font-size:17px}
+.btn.birincil{background:var(--ana);color:#fff}.btn.ikincil{background:var(--ana2);color:var(--ana)}
+.btn.sessiz{background:#fff;border:1.5px solid var(--cizgi)}
+.btn:disabled{opacity:.45}
+input,textarea,select{width:100%;border:1.5px solid var(--cizgi);border-radius:12px;padding:12px;font:inherit;background:#fff;color:var(--ink)}
+textarea{min-height:110px;resize:vertical}
+label{display:block;font-size:13px;color:var(--soluk);font-weight:600;margin:12px 0 4px}
+.kart{background:var(--kart);border:1px solid var(--cizgi);border-radius:12px;margin-bottom:10px;overflow:hidden;display:flex;width:100%;text-align:left}
+.omurga{width:7px;flex:none}.kart .ic2{flex:1;min-width:0;padding:11px 13px}
+.ust{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.ust b{font-size:16px}.ust span{font-size:12px;color:var(--soluk);white-space:nowrap}
+.goz{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:14px;margin:5px 0 7px}
+.etiketler{display:flex;flex-wrap:wrap;gap:5px}
+.et{font-size:12px;font-weight:700;padding:2px 9px;border-radius:12px;background:var(--ana2);color:var(--ana)}
+.et.soluk{background:#F0F0F0;color:#777}
+.cipler{display:flex;flex-wrap:wrap;gap:8px}
+.cip{min-height:48px;padding:0 14px;border-radius:12px;border:1.5px solid var(--cizgi);background:#fff;font-weight:600;font-size:15px;flex:1}
+.cip.secili{background:var(--ana);border-color:var(--ana);color:#fff}
+.cip.r-Yüksek.secili{background:var(--kirmizi);border-color:var(--kirmizi)}
+.cip.r-Orta.secili{background:var(--sari);border-color:var(--sari)}
+.cip.r-Az.secili{background:var(--yesil);border-color:var(--yesil)}
+.blok{background:var(--kart);border:1px solid var(--cizgi);border-radius:14px;padding:14px;margin-bottom:12px}
+.blok h3{margin:0 0 8px;font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:var(--soluk)}
+.satir{display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-top:1px solid #EEF2F0;font-size:15px}
+.satir:first-of-type{border-top:0}.satir span{color:var(--soluk)}.satir b{text-align:right}
+.bos{text-align:center;color:var(--soluk);padding:40px 16px}.bos b{display:block;color:var(--ink);font-size:19px;margin-bottom:6px}
+.uyari{font-size:14px;background:#FFF1CC;color:#8A5A00;border-radius:10px;padding:10px 12px;margin-bottom:10px}
+.iyi{background:var(--ana2);color:var(--ana)}
+.arama{margin-bottom:10px}
+.filtreler{display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;scrollbar-width:none}
+.filtre{flex:none;padding:8px 13px;border-radius:20px;background:#fff;border:1.5px solid var(--cizgi);font-size:14px;font-weight:600;color:var(--soluk)}
+.filtre.on{background:var(--ana);border-color:var(--ana);color:#fff}
+</style></head><body><div id="app"></div>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+"use strict";
+const firebaseConfig = {
+  apiKey: "AIzaSyCe4jssnUczH8_1S3RCmcAqgx8fTKzcb1Q",
+  authDomain: "losante-saha-denetimi.firebaseapp.com",
+  projectId: "losante-saha-denetimi",
+  storageBucket: "losante-saha-denetimi.firebasestorage.app",
+  messagingSenderId: "1073904432755",
+  appId: "1:1073904432755:web:d7347ff758328f5bad1c06"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+const auth = firebase.auth();
+
+const LS={get:(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch(e){return d}},set:(k,v)=>localStorage.setItem(k,JSON.stringify(v))};
+(function(){ const p=new URLSearchParams(location.search);
+  if(p.get('api')) LS.set('api',p.get('api'));
+  if(p.get('token')) LS.set('token',p.get('token'));
+  if(p.get('api')||p.get('token')) history.replaceState(null,'',location.pathname);
+})();
+const ayar=()=>({api:LS.get('api',''),token:LS.get('token',''),denetci:LS.get('denetci','')});
+
+let ekran='liste', kayitlar=[], secili=null, taslak=null, mesaj='', yukleniyor=false;
+let filtre='tum', arama='', kullanici=null, raporFiltre={};
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const riskRenk=r=>r==='Yüksek'?'var(--kirmizi)':r==='Orta'?'var(--sari)':r==='Az'?'var(--yesil)':'var(--cizgi)';
+const zaman=s=>{const m=String(s||'').match(/(\d{2})\.(\d{2})\.(\d{4})(?:\s+(\d{2}):(\d{2}))?/);return m?new Date(+m[3],+m[2]-1,+m[1],+(m[4]||0),+(m[5]||0)).getTime():0;};
+
+// ---------- Kimlik ----------
+auth.onAuthStateChanged(u=>{ kullanici=u; if(u){ LS.set('eposta',u.email||''); kayitlariGetir(); } ciz(); });
+
+async function girisBaglantisiGonder(eposta){
+  const ayarlar={ url: location.origin+location.pathname, handleCodeInApp:true };
+  try{
+    await auth.sendSignInLinkToEmail(eposta, ayarlar);
+    LS.set('bekleyenEposta',eposta);
+    mesaj='Giriş bağlantısı '+eposta+' adresine gönderildi. Aynı telefondan bağlantıya dokunun.';
+  }catch(e){ mesaj='Bağlantı gönderilemedi: '+e.message; }
+  ciz();
+}
+(async function girisiTamamla(){
+  if(!auth.isSignInWithEmailLink(location.href)) return;
+  let eposta=LS.get('bekleyenEposta','');
+  if(!eposta) eposta=prompt('Giriş için e-posta adresinizi yazın');
+  if(!eposta) return;
+  try{ await auth.signInWithEmailLink(eposta, location.href); history.replaceState(null,'',location.pathname); }
+  catch(e){ mesaj='Giriş tamamlanamadı: '+e.message; ciz(); }
+})();
+
+// ---------- Veri ----------
+async function kayitlariGetir(){
+  yukleniyor=true; ciz();
+  try{
+    const anlik=await db.collection('kayitlar').limit(1000).get();
+    kayitlar=anlik.docs.map(d=>({id:d.id,...d.data()}))
+      .filter(k=>k['Kayıt ID'] && k['İş durumu']!=='Demo')
+      .sort((a,b)=>(zaman(b['Son düzenleme'])||zaman(b['Sisteme alındı'])||zaman(b['Tarih']))-(zaman(a['Son düzenleme'])||zaman(a['Sisteme alındı'])||zaman(a['Tarih'])));
+    mesaj='';
+  }catch(e){ mesaj='Kayıtlar okunamadı: '+e.message; }
+  yukleniyor=false; ciz();
+}
+
+async function sunucuya(govde){
+  const s=ayar();
+  const r=await fetch(s.api,{method:'POST',body:JSON.stringify({token:s.token,...govde})});
+  return r.json();
+}
+
+// ---------- Ekranlar ----------
+function ciz(){ ({giris:cizGiris,liste:cizListe,rapor:cizRapor,duzenle:cizDuzenle,raporla:cizRaporla})[kullanici?ekran:'giris'](); }
+function ustBar(baslik,sag=''){
+  return `<header><div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><h1>${baslik}</h1>${sag}</div>
+    <div class="alt-bilgi">${esc(LS.get('eposta','')||'')}${kayitlar.length?' · '+kayitlar.length+' kayıt':''}</div></header>`;
+}
+
+function cizGiris(){
+  $('#app').innerHTML=`<div class="kap">${ustBar('Saha Denetimi')}
+  <div class="icerik">${mesaj?`<div class="uyari">${esc(mesaj)}</div>`:''}
+    <div class="blok"><h3>Giriş</h3>
+      <p style="margin:0 0 10px;font-size:15px">Ekip e-postanızı yazın. Size bir giriş bağlantısı gönderilecek; şifre gerekmez.</p>
+      <input id="eposta" type="email" inputmode="email" placeholder="ad@ornek.com" value="${esc(LS.get('bekleyenEposta',''))}">
+    </div></div>
+  <div class="alt"><div class="ic"><button class="btn birincil" id="gonder">Giriş bağlantısı gönder</button></div></div></div>`;
+  $('#gonder').onclick=()=>{ const e=$('#eposta').value.trim(); if(e) girisBaglantisiGonder(e); };
+}
+
+function cizListe(){
+  const filtreler=[['tum','Tümü'],['acik','Açık'],['yuksek','Yüksek risk'],['bekleyen','Değerlendirilmemiş'],['benim','Benim kayıtlarım']];
+  const ara=arama.toLocaleLowerCase('tr');
+  const l=kayitlar.filter(k=>({
+      tum:true, acik:k['Durum']==='Açık', yuksek:k['Risk']==='Yüksek',
+      bekleyen:!k['SAS kodu'], benim:(k['Denetçi']||'')===LS.get('denetci','')||(k['Son düzenleyen']||'')===LS.get('eposta','')
+    })[filtre])
+    .filter(k=>!ara||[k['Kayıt ID'],k['Kat'],k['Servis'],k['Bölüm'],k['Gözlem (ses dökümü)'],k['Denetçi'],k['SAS kodu']].join(' ').toLocaleLowerCase('tr').includes(ara));
+  $('#app').innerHTML=`<div class="kap">${ustBar('Kayıtlar',`<button class="et" id="yenile">${yukleniyor?'…':'Yenile'}</button>`)}
+  <div class="icerik">${mesaj?`<div class="uyari">${esc(mesaj)}</div>`:''}
+    <input class="arama" id="ara" type="search" placeholder="Ara: servis, bölüm, gözlem, kayıt no" value="${esc(arama)}">
+    <div class="filtreler">${filtreler.map(([k,a])=>`<button class="filtre ${filtre===k?'on':''}" data-f="${k}">${a}</button>`).join('')}</div>
+    <p style="font-size:13px;color:var(--soluk);margin:4px 2px 8px">${l.length} kayıt</p>
+    ${l.slice(0,200).map(k=>`<button class="kart" data-id="${esc(k.id)}"><span class="omurga" style="background:${riskRenk(k['Risk'])}"></span><span class="ic2">
+      <span class="ust"><b>${esc(k['Bölüm']||k['Servis']||'—')}</b><span>${esc(k['Tarih']||'')}</span></span>
+      <span class="goz">${esc(k['Gözlem (ses dökümü)']||'(gözlem yok)')}</span>
+      <span class="etiketler">${k['SAS kodu']?`<span class="et">${esc(k['SAS kodu'])}</span>`:`<span class="et soluk">kodsuz</span>`}${k['Risk']?`<span class="et" style="background:${riskRenk(k['Risk'])};color:#fff">${esc(k['Risk'])}</span>`:''}${k['İş durumu']?`<span class="et soluk">${esc(k['İş durumu'])}</span>`:''}</span>
+    </span></button>`).join('')||`<div class="bos"><b>Kayıt yok</b>Filtreyi değiştirin.</div>`}
+  </div>
+  <div class="alt"><div class="ic"><button class="btn ikincil" id="raporBtn" style="flex:.8">Rapor</button><button class="btn sessiz" id="cikis" style="flex:.5">Çıkış</button></div></div></div>`;
+  $('#yenile').onclick=kayitlariGetir;
+  $('#ara').oninput=e=>{arama=e.target.value;const p=e.target.selectionStart;ciz();const a=$('#ara');a.focus();a.setSelectionRange(p,p);};
+  document.querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>{filtre=b.dataset.f;ciz();});
+  document.querySelectorAll('[data-id]').forEach(b=>b.onclick=()=>{secili=kayitlar.find(k=>k.id===b.dataset.id);ekran='rapor';ciz();window.scrollTo(0,0);});
+  $('#raporBtn').onclick=()=>{ekran='raporla';ciz();};
+  $('#cikis').onclick=()=>auth.signOut();
+}
+
+function cizRapor(){
+  const k=secili||{}; const v=a=>k[a]||'';
+  const sat=(e,d)=>d?`<div class="satir"><span>${e}</span><b>${esc(d)}</b></div>`:'';
+  $('#app').innerHTML=`<div class="kap">${ustBar('Bulgu raporu')}
+  <div class="icerik">
+    <div class="blok"><h3>${esc(v('Kayıt ID'))}</h3>
+      <div style="font-size:19px;font-weight:700">${esc(v('Bölüm')||v('Servis'))}</div>
+      <div style="color:var(--soluk);font-size:14px">${esc([v('Kat'),v('Blok'),v('Bölüm')?v('Servis'):''].filter(Boolean).join(' · '))}</div>
+      <div style="color:var(--soluk);font-size:13px;margin-top:6px">${esc(v('Tarih'))} ${esc(v('Açılış'))}${v('Denetçi')?' · '+esc(v('Denetçi')):''}</div>
+    </div>
+    <div class="blok"><h3>Gözlem</h3><p style="margin:0;font-size:17px">${esc(v('Gözlem (ses dökümü)'))||'—'}</p>
+      ${v('Konum detayı (ses)')?`<p style="margin:10px 0 0;font-size:14px;color:var(--soluk)">Konum: ${esc(v('Konum detayı (ses)'))}</p>`:''}</div>
+    <div class="blok"><h3>Değerlendirme</h3>
+      ${sat('SAS kodu',v('SAS kodu'))}${sat('DÖ kodu',v('DÖ kodu'))}${sat('Bulgu tipi',v('Bulgu tipi'))}
+      ${sat('Sıklık',v('Sıklık'))}${sat('Etki',v('Etki'))}${sat('Risk',v('Risk'))}${sat('Ön karar',v('Ön karar'))}
+      ${sat('Hemen müdahale',v('Hemen müdahale'))}${sat('Kime bildirildi',v('Kime bildirildi'))}</div>
+    <div class="blok"><h3>Takip</h3>
+      ${sat('Sorumlu birim',v('Sorumlu birim'))}${sat('Termin',v('Termin'))}${sat('Durum',v('Durum'))}${sat('İş durumu',v('İş durumu'))}
+      ${v('Not')?`<p style="margin:8px 0 0;font-size:14px;background:#FFF6D6;border-radius:8px;padding:8px">${esc(v('Not'))}</p>`:''}
+      ${sat('Son düzenleyen',[v('Son düzenleyen'),v('Son düzenleme')].filter(Boolean).join(' · '))}</div>
+    ${v('Tüm fotoğraflar (Drive)')?`<div class="blok"><h3>Fotoğraflar</h3><p style="margin:0;font-size:14px;color:var(--soluk)">Fotoğraflar Drive klasöründedir.</p></div>`:''}
+  </div>
+  <div class="alt"><div class="ic"><button class="btn sessiz" id="geri">Liste</button><button class="btn birincil" id="duzenle">Düzenle</button></div></div></div>`;
+  $('#geri').onclick=()=>{ekran='liste';ciz();};
+  $('#duzenle').onclick=()=>{taslak=Object.assign({},secili);ekran='duzenle';ciz();window.scrollTo(0,0);};
+}
+
+function cipSeti(alan,secenekler,onEk=''){
+  return `<div class="cipler">${secenekler.map(s=>`<button class="cip ${onEk?onEk+s:''} ${taslak[alan]===s?'secili':''}" data-alan="${alan}" data-deger="${esc(s)}">${esc(s)}</button>`).join('')}</div>`;
+}
+
+function cizDuzenle(){
+  const t=taslak;
+  const eski=secili['Son düzenleme'];
+  $('#app').innerHTML=`<div class="kap">${ustBar('Kaydı düzenle')}
+  <div class="icerik">
+    ${eski?`<div class="uyari">Bu kayıt en son ${esc(secili['Son düzenleyen']||'bilinmiyor')} tarafından ${esc(eski)} tarihinde güncellendi.</div>`:''}
+    ${mesaj?`<div class="uyari ${mesaj.indexOf('kaydedildi')>=0?'iyi':''}">${esc(mesaj)}</div>`:''}
+    <div class="blok"><label>Gözlem</label><textarea id="gozlem">${esc(t['Gözlem (ses dökümü)']||'')}</textarea>
+      <label>Konum detayı</label><input id="konum" value="${esc(t['Konum detayı (ses)']||'')}"></div>
+    <div class="blok"><h3>Değerlendirme</h3>
+      <label>Bulgu tipi</label>${cipSeti('Bulgu tipi',['Fiziksel','Uygulama','Kayıt','Cihaz'])}
+      <label>Sıklık</label>${cipSeti('Sıklık',['Az','Orta','Yüksek'],'r-')}
+      <label>Etki</label>${cipSeti('Etki',['Bireysel','Sistemsel'])}
+      <label>Risk</label>${cipSeti('Risk',['Az','Orta','Yüksek'],'r-')}
+      <label>Hemen müdahale</label>${cipSeti('Hemen müdahale',['Hayır','Evet'])}
+      <label>SAS kodu</label><input id="sas" value="${esc(t['SAS kodu']||'')}" placeholder="örn. SH.İY">
+      <label>DÖ kodu</label><input id="do" value="${esc(t['DÖ kodu']||'')}" placeholder="örn. SH.İY.01.05; SH.İY.01.08"></div>
+    <div class="blok"><h3>Takip</h3>
+      <label>İş durumu</label>${cipSeti('İş durumu',['Devam ediyor','Tamamlandı','Ertelendi'])}
+      <label>Durum</label>${cipSeti('Durum',['Açık','Değerlendirmede','DÖF açıldı','Kapatıldı'])}
+      <label>Not</label><textarea id="not" style="min-height:70px">${esc(t['Not']||'')}</textarea></div>
+  </div>
+  <div class="alt"><div class="ic"><button class="btn sessiz" id="vazgec">Vazgeç</button><button class="btn birincil" id="kaydet">Kaydet</button></div></div></div>`;
+  document.querySelectorAll('[data-alan]').forEach(b=>b.onclick=()=>{
+    oku(); const a=b.dataset.alan,d=b.dataset.deger; t[a]=t[a]===d?'':d;
+    const y=window.scrollY; cizDuzenle(); window.scrollTo(0,y);
+  });
+  const oku=()=>{ t['Gözlem (ses dökümü)']=$('#gozlem').value; t['Konum detayı (ses)']=$('#konum').value;
+    t['SAS kodu']=$('#sas').value.trim(); t['DÖ kodu']=$('#do').value.trim(); t['Not']=$('#not').value; };
+  $('#vazgec').onclick=()=>{ekran='rapor';mesaj='';ciz();};
+  $('#kaydet').onclick=async()=>{
+    oku(); $('#kaydet').disabled=true; mesaj='Kaydediliyor…'; ciz();
+    const alanlar={};
+    ['Gözlem (ses dökümü)','Konum detayı (ses)','SAS kodu','DÖ kodu','Bulgu tipi','Sıklık','Etki','Risk','Hemen müdahale','Durum','İş durumu','Not']
+      .forEach(a=>alanlar[a]=t[a]||'');
+    try{
+      const j=await sunucuya({action:'duzenle',kayit:{id:t['Kayıt ID'],alanlar}});
+      if(j.ok){ Object.assign(secili,alanlar,{'Son düzenleyen':j.duzenleyen,'Son düzenleme':j.zaman});
+        mesaj='Kayıt kaydedildi.'; ekran='rapor'; }
+      else mesaj='Kaydedilemedi: '+(j.hata||'');
+    }catch(e){ mesaj='Kaydedilemedi: '+e.message; }
+    ciz();
+  };
+}
+
+function cizRaporla(){
+  const alanlar=[['Kat','Kat'],['Servis','Servis'],['SAS kodu','SAS kodu'],['Risk','Risk'],['İş durumu','İş durumu'],['Durum','Durum']];
+  const tekil=ad=>['Tümü',...new Set(kayitlar.flatMap(k=>String(k[ad]||'').split(';').map(x=>x.trim())).filter(Boolean))].slice(0,60);
+  $('#app').innerHTML=`<div class="kap">${ustBar('Rapor')}
+  <div class="icerik">${mesaj?`<div class="uyari ${mesaj.indexOf('hazır')>=0?'iyi':''}">${esc(mesaj)}</div>`:''}
+    <div class="blok"><h3>Filtreler</h3>
+      ${alanlar.map(([ad])=>`<label>${ad}</label><select data-rf="${ad}">${tekil(ad).map(x=>`<option ${raporFiltre[ad]===x?'selected':''}>${esc(x)}</option>`).join('')}</select>`).join('')}
+      <label>Fotoğrafları ekle</label><select data-rf="Fotoğrafları ekle"><option>Hayır</option><option ${raporFiltre['Fotoğrafları ekle']==='Evet'?'selected':''}>Evet</option></select>
+    </div>
+    <p style="font-size:13px;color:var(--soluk);margin:0 2px">Rapor sunucuda oluşturulur, PDF Raporlar klasörüne kaydedilir ve Geçmiş Raporlar sekmesine eklenir.</p>
+  </div>
+  <div class="alt"><div class="ic"><button class="btn sessiz" id="geri">Liste</button><button class="btn birincil" id="olustur">Rapor ve PDF oluştur</button></div></div></div>`;
+  document.querySelectorAll('[data-rf]').forEach(s=>s.onchange=()=>{raporFiltre[s.dataset.rf]=s.value;});
+  $('#geri').onclick=()=>{ekran='liste';mesaj='';ciz();};
+  $('#olustur').onclick=async()=>{
+    $('#olustur').disabled=true; mesaj='Rapor oluşturuluyor, bu işlem bir dakika sürebilir…'; ciz();
+    try{
+      const j=await sunucuya({action:'rapor',filtre:raporFiltre});
+      mesaj = j.ok ? 'PDF hazır: '+(j.dosya||'') : 'Rapor oluşturulamadı: '+(j.hata||'');
+      if(j.ok&&j.url) setTimeout(()=>window.open(j.url,'_blank'),400);
+    }catch(e){ mesaj='Rapor oluşturulamadı: '+e.message; }
+    ciz();
+  };
+}
+
+ciz();
+</script></body></html>
